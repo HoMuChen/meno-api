@@ -1,0 +1,102 @@
+/**
+ * Express Application Setup
+ * Configures Express app with middleware, routes, and error handling
+ */
+const express = require('express');
+const swaggerUi = require('swagger-ui-express');
+const swaggerSpec = require('./components/config/swagger');
+const logger = require('./components/logging');
+const { StorageFactory } = require('./components/storage');
+const config = require('./components/config');
+const createRoutes = require('./api/routes');
+const { errorHandler, notFound } = require('./api/middleware/errorHandler');
+const requestLogger = require('./api/middleware/requestLogger');
+
+// Import services and controllers
+const { UserService, FileService } = require('./core/services');
+const UserController = require('./api/controllers/user.controller');
+const FileController = require('./api/controllers/file.controller');
+const HealthController = require('./api/controllers/health.controller');
+
+/**
+ * Create and configure Express app
+ */
+const createApp = () => {
+  const app = express();
+
+  // Initialize storage provider
+  const storageProvider = StorageFactory.create({
+    provider: config.storage.provider,
+    localPath: config.storage.localPath,
+    gcsBucket: config.storage.gcsBucket,
+    gcsKeyFile: config.storage.gcsKeyFile
+  });
+
+  logger.info('Storage provider initialized', { provider: config.storage.provider });
+
+  // Initialize services with dependencies
+  const userService = new UserService(logger, storageProvider);
+  const fileService = new FileService(logger, storageProvider);
+
+  // Initialize controllers with services
+  const userController = new UserController(userService, logger);
+  const fileController = new FileController(fileService, logger);
+  const healthController = new HealthController(logger);
+
+  // Basic middleware
+  app.use(express.json());
+  app.use(express.urlencoded({ extended: true }));
+
+  // Request logging
+  app.use(requestLogger);
+
+  // CORS (if needed)
+  app.use((req, res, next) => {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+    if (req.method === 'OPTIONS') {
+      return res.sendStatus(200);
+    }
+    next();
+  });
+
+  // Swagger documentation
+  app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
+    explorer: true,
+    customCss: '.swagger-ui .topbar { display: none }'
+  }));
+
+  // Root endpoint
+  app.get('/', (req, res) => {
+    res.json({
+      success: true,
+      message: 'Meno API Server',
+      version: '1.0.0',
+      documentation: '/api-docs',
+      health: '/api/health'
+    });
+  });
+
+  // API routes
+  app.use(config.api.prefix, createRoutes({
+    userController,
+    fileController,
+    healthController
+  }));
+
+  // Serve static files (for local storage)
+  if (config.storage.provider === 'local') {
+    app.use('/files', express.static(config.storage.localPath));
+  }
+
+  // 404 handler
+  app.use(notFound);
+
+  // Global error handler (must be last)
+  app.use(errorHandler);
+
+  return app;
+};
+
+module.exports = createApp;
