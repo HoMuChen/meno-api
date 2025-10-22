@@ -2,13 +2,13 @@
  * User Controller
  * HTTP handlers for user-related endpoints
  */
-const { success, created, paginated } = require('../../utils/responses');
+const BaseController = require('./base.controller');
 const { BadRequestError } = require('../../utils/errors');
 
-class UserController {
+class UserController extends BaseController {
   constructor(userService, logger) {
+    super(userService, logger);
     this.userService = userService;
-    this.logger = logger;
   }
 
   /**
@@ -32,18 +32,11 @@ class UserController {
    *       200:
    *         description: List of users
    */
-  async getAllUsers(req, res, next) {
-    try {
-      const page = parseInt(req.query.page) || 1;
-      const limit = parseInt(req.query.limit) || 10;
-
-      const result = await this.userService.getAllUsers(page, limit);
-
-      return paginated(res, result.users, page, limit, result.total);
-    } catch (error) {
-      next(error);
-    }
-  }
+  getAllUsers = this.asyncHandler(async (req, res) => {
+    const { page, limit } = this.getPaginationParams(req);
+    const result = await this.userService.getAllUsers(page, limit);
+    return this.sendPaginated(res, result.users, page, limit, result.total);
+  });
 
   /**
    * @swagger
@@ -63,14 +56,10 @@ class UserController {
    *       404:
    *         description: User not found
    */
-  async getUserById(req, res, next) {
-    try {
-      const user = await this.userService.getUserById(req.params.id);
-      return success(res, user, 'User retrieved successfully');
-    } catch (error) {
-      next(error);
-    }
-  }
+  getUserById = this.asyncHandler(async (req, res) => {
+    const user = await this.userService.getUserById(req.params.id);
+    return this.sendSuccess(res, user, 'User retrieved successfully');
+  });
 
   /**
    * @swagger
@@ -96,14 +85,10 @@ class UserController {
    *       201:
    *         description: User created
    */
-  async createUser(req, res, next) {
-    try {
-      const user = await this.userService.createUser(req.body);
-      return created(res, user, 'User created successfully');
-    } catch (error) {
-      next(error);
-    }
-  }
+  createUser = this.asyncHandler(async (req, res) => {
+    const user = await this.userService.createUser(req.body);
+    return this.sendCreated(res, user, 'User created successfully');
+  });
 
   /**
    * @swagger
@@ -132,14 +117,10 @@ class UserController {
    *       200:
    *         description: User updated
    */
-  async updateUser(req, res, next) {
-    try {
-      const user = await this.userService.updateUser(req.params.id, req.body);
-      return success(res, user, 'User updated successfully');
-    } catch (error) {
-      next(error);
-    }
-  }
+  updateUser = this.asyncHandler(async (req, res) => {
+    const user = await this.userService.updateUser(req.params.id, req.body);
+    return this.sendSuccess(res, user, 'User updated successfully');
+  });
 
   /**
    * @swagger
@@ -157,14 +138,10 @@ class UserController {
    *       200:
    *         description: User deleted
    */
-  async deleteUser(req, res, next) {
-    try {
-      await this.userService.deleteUser(req.params.id);
-      return success(res, null, 'User deleted successfully');
-    } catch (error) {
-      next(error);
-    }
-  }
+  deleteUser = this.asyncHandler(async (req, res) => {
+    await this.userService.deleteUser(req.params.id);
+    return this.sendSuccess(res, null, 'User deleted successfully');
+  });
 
   /**
    * @swagger
@@ -192,18 +169,14 @@ class UserController {
    *       200:
    *         description: Avatar uploaded
    */
-  async uploadAvatar(req, res, next) {
-    try {
-      if (!req.file) {
-        throw new BadRequestError('No file uploaded');
-      }
-
-      const user = await this.userService.uploadAvatar(req.params.id, req.file);
-      return success(res, user, 'Avatar uploaded successfully');
-    } catch (error) {
-      next(error);
+  uploadAvatar = this.asyncHandler(async (req, res) => {
+    if (!req.file) {
+      throw new BadRequestError('No file uploaded');
     }
-  }
+
+    const user = await this.userService.uploadAvatar(req.params.id, req.file);
+    return this.sendSuccess(res, user, 'Avatar uploaded successfully');
+  });
 }
 
 module.exports = UserController;

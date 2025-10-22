@@ -2,13 +2,13 @@
  * File Controller
  * HTTP handlers for file-related endpoints
  */
-const { success, created, paginated } = require('../../utils/responses');
+const BaseController = require('./base.controller');
 const { BadRequestError } = require('../../utils/errors');
 
-class FileController {
+class FileController extends BaseController {
   constructor(fileService, logger) {
+    super(fileService, logger);
     this.fileService = fileService;
-    this.logger = logger;
   }
 
   /**
@@ -31,20 +31,15 @@ class FileController {
    *       201:
    *         description: File uploaded successfully
    */
-  async uploadFile(req, res, next) {
-    try {
-      if (!req.file) {
-        throw new BadRequestError('No file uploaded');
-      }
-
-      const uploadedBy = req.user?.id || null; // If authentication is implemented
-      const file = await this.fileService.uploadFile(req.file, uploadedBy);
-
-      return created(res, file, 'File uploaded successfully');
-    } catch (error) {
-      next(error);
+  uploadFile = this.asyncHandler(async (req, res) => {
+    if (!req.file) {
+      throw new BadRequestError('No file uploaded');
     }
-  }
+
+    const uploadedBy = this.getUserId(req);
+    const file = await this.fileService.uploadFile(req.file, uploadedBy);
+    return this.sendCreated(res, file, 'File uploaded successfully');
+  });
 
   /**
    * @swagger
@@ -67,19 +62,12 @@ class FileController {
    *       200:
    *         description: List of files
    */
-  async getAllFiles(req, res, next) {
-    try {
-      const page = parseInt(req.query.page) || 1;
-      const limit = parseInt(req.query.limit) || 10;
-      const uploadedBy = req.query.uploadedBy || null;
-
-      const result = await this.fileService.getAllFiles(page, limit, uploadedBy);
-
-      return paginated(res, result.files, page, limit, result.total);
-    } catch (error) {
-      next(error);
-    }
-  }
+  getAllFiles = this.asyncHandler(async (req, res) => {
+    const { page, limit } = this.getPaginationParams(req);
+    const uploadedBy = req.query.uploadedBy || null;
+    const result = await this.fileService.getAllFiles(page, limit, uploadedBy);
+    return this.sendPaginated(res, result.files, page, limit, result.total);
+  });
 
   /**
    * @swagger
@@ -97,14 +85,10 @@ class FileController {
    *       200:
    *         description: File details
    */
-  async getFileById(req, res, next) {
-    try {
-      const file = await this.fileService.getFileById(req.params.id);
-      return success(res, file, 'File retrieved successfully');
-    } catch (error) {
-      next(error);
-    }
-  }
+  getFileById = this.asyncHandler(async (req, res) => {
+    const file = await this.fileService.getFileById(req.params.id);
+    return this.sendSuccess(res, file, 'File retrieved successfully');
+  });
 
   /**
    * @swagger
@@ -122,17 +106,12 @@ class FileController {
    *       200:
    *         description: File download
    */
-  async downloadFile(req, res, next) {
-    try {
-      const { file, data } = await this.fileService.downloadFile(req.params.id);
-
-      res.setHeader('Content-Type', file.mimeType);
-      res.setHeader('Content-Disposition', `attachment; filename="${file.filename}"`);
-      res.send(data);
-    } catch (error) {
-      next(error);
-    }
-  }
+  downloadFile = this.asyncHandler(async (req, res) => {
+    const { file, data } = await this.fileService.downloadFile(req.params.id);
+    res.setHeader('Content-Type', file.mimeType);
+    res.setHeader('Content-Disposition', `attachment; filename="${file.filename}"`);
+    res.send(data);
+  });
 
   /**
    * @swagger
@@ -150,14 +129,10 @@ class FileController {
    *       200:
    *         description: File deleted
    */
-  async deleteFile(req, res, next) {
-    try {
-      await this.fileService.deleteFile(req.params.id);
-      return success(res, null, 'File deleted successfully');
-    } catch (error) {
-      next(error);
-    }
-  }
+  deleteFile = this.asyncHandler(async (req, res) => {
+    await this.fileService.deleteFile(req.params.id);
+    return this.sendSuccess(res, null, 'File deleted successfully');
+  });
 
   /**
    * @swagger
@@ -180,16 +155,11 @@ class FileController {
    *       200:
    *         description: File URL
    */
-  async getFileUrl(req, res, next) {
-    try {
-      const expiresIn = parseInt(req.query.expiresIn) || 3600;
-      const result = await this.fileService.getFileUrl(req.params.id, expiresIn);
-
-      return success(res, { url: result.url }, 'File URL generated successfully');
-    } catch (error) {
-      next(error);
-    }
-  }
+  getFileUrl = this.asyncHandler(async (req, res) => {
+    const expiresIn = parseInt(req.query.expiresIn) || 3600;
+    const result = await this.fileService.getFileUrl(req.params.id, expiresIn);
+    return this.sendSuccess(res, { url: result.url }, 'File URL generated successfully');
+  });
 }
 
 module.exports = FileController;
