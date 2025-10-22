@@ -250,6 +250,75 @@ class TranscriptionController {
       });
     }
   };
+
+  /**
+   * Get transcription status
+   * Polling endpoint for real-time progress updates
+   */
+  getStatus = async (req, res) => {
+    try {
+      const userId = req.user._id;
+      const { meetingId } = req.params;
+
+      // Verify user has access to this meeting
+      const meeting = await Meeting.findById(meetingId).populate('projectId');
+
+      if (!meeting) {
+        return res.status(404).json({
+          success: false,
+          message: 'Meeting not found'
+        });
+      }
+
+      if (meeting.projectId.userId.toString() !== userId.toString()) {
+        return res.status(403).json({
+          success: false,
+          message: 'Access denied'
+        });
+      }
+
+      // Build status response
+      const statusData = {
+        status: meeting.transcriptionStatus,
+        progress: meeting.transcriptionProgress,
+        processedSegments: meeting.metadata?.transcription?.processedSegments || 0,
+        estimatedTotal: meeting.metadata?.transcription?.estimatedTotal || 0,
+        startedAt: meeting.metadata?.transcription?.startedAt || null,
+        completedAt: meeting.metadata?.transcription?.completedAt || null,
+        errorMessage: meeting.metadata?.transcription?.errorMessage || null
+      };
+
+      // Calculate elapsed and estimated remaining time
+      if (statusData.startedAt) {
+        const startTime = new Date(statusData.startedAt).getTime();
+        const currentTime = Date.now();
+        statusData.elapsedTime = currentTime - startTime; // milliseconds
+
+        // Estimate remaining time if processing
+        if (statusData.status === 'processing' && statusData.progress > 0) {
+          const timePerPercent = statusData.elapsedTime / statusData.progress;
+          const remainingPercent = 100 - statusData.progress;
+          statusData.estimatedRemaining = Math.ceil(timePerPercent * remainingPercent);
+        }
+      }
+
+      res.status(200).json({
+        success: true,
+        data: statusData
+      });
+    } catch (error) {
+      this.logger.error('Get transcription status controller error', {
+        error: error.message,
+        meetingId: req.params.meetingId,
+        userId: req.user?._id
+      });
+
+      res.status(500).json({
+        success: false,
+        message: 'Error retrieving transcription status'
+      });
+    }
+  };
 }
 
 module.exports = TranscriptionController;

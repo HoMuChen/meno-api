@@ -119,6 +119,34 @@ const meetingSchema = new mongoose.Schema(
       originalName: {
         type: String,
         trim: true
+      },
+      transcription: {
+        startedAt: {
+          type: Date,
+          default: null
+        },
+        completedAt: {
+          type: Date,
+          default: null
+        },
+        errorMessage: {
+          type: String,
+          default: null
+        },
+        processedSegments: {
+          type: Number,
+          default: 0,
+          min: [0, 'Processed segments cannot be negative']
+        },
+        estimatedTotal: {
+          type: Number,
+          default: 0,
+          min: [0, 'Estimated total cannot be negative']
+        },
+        lastChunkAt: {
+          type: Date,
+          default: null
+        }
       }
     }
   },

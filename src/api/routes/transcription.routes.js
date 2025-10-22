@@ -25,6 +25,61 @@ const createTranscriptionRoutes = (transcriptionController) => {
 
   /**
    * @swagger
+   * /api/meetings/{meetingId}/transcriptions/status:
+   *   get:
+   *     summary: Get transcription status
+   *     description: Get real-time transcription progress for polling
+   *     tags: [Transcriptions]
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: meetingId
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: Meeting ID
+   *     responses:
+   *       200:
+   *         description: Status retrieved successfully
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                 data:
+   *                   type: object
+   *                   properties:
+   *                     status:
+   *                       type: string
+   *                       enum: [pending, processing, completed, failed]
+   *                     progress:
+   *                       type: number
+   *                       minimum: 0
+   *                       maximum: 100
+   *                     processedSegments:
+   *                       type: number
+   *                     estimatedTotal:
+   *                       type: number
+   *                     elapsedTime:
+   *                       type: number
+   *                       description: Elapsed time in milliseconds
+   *                     estimatedRemaining:
+   *                       type: number
+   *                       description: Estimated remaining time in milliseconds
+   *                     errorMessage:
+   *                       type: string
+   *       401:
+   *         description: Unauthorized
+   *       404:
+   *         description: Meeting not found
+   */
+  router.get('/status', transcriptionController.getStatus);
+
+  /**
+   * @swagger
    * /api/meetings/{meetingId}/transcriptions/search:
    *   get:
    *     summary: Search transcriptions by text

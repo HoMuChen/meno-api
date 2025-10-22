@@ -20,7 +20,7 @@ const { UserService, FileService, AuthService } = require('./core/services');
 const ProjectService = require('./core/services/project.service');
 const MeetingService = require('./core/services/meeting.service');
 const TranscriptionDataService = require('./core/services/transcription-data.service');
-const MockTranscriptionService = require('./core/services/mock-transcription.service');
+const TranscriptionServiceFactory = require('./core/services/transcription-service.factory');
 const AudioStorageFactory = require('./core/storage/storage.factory');
 const UserController = require('./api/controllers/user.controller');
 const FileController = require('./api/controllers/file.controller');
@@ -69,16 +69,27 @@ const createApp = () => {
   const fileService = new FileService(logger, storageProvider);
   const authService = new AuthService(logger);
   const projectService = new ProjectService(logger);
-  const transcriptionService = new MockTranscriptionService();
   const transcriptionDataService = new TranscriptionDataService(logger);
+
+  // Initialize meeting service first (needed for transcription factory)
   const meetingService = new MeetingService(
     logger,
     fileService,
     projectService,
-    transcriptionService,
+    null, // transcriptionService - will be set after factory initialization
     transcriptionDataService,
     audioStorageProvider
   );
+
+  // Initialize transcription service using factory
+  const transcriptionService = TranscriptionServiceFactory.getInstance(
+    logger,
+    transcriptionDataService,
+    meetingService
+  );
+
+  // Set the transcription service on meeting service
+  meetingService.transcriptionService = transcriptionService;
 
   // Initialize controllers with services
   const userController = new UserController(userService, logger);

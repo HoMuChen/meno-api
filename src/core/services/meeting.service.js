@@ -148,13 +148,42 @@ class MeetingService {
   }
 
   /**
+   * Get meeting by ID (internal use without access control)
+   * @param {string} meetingId - Meeting ID
+   * @returns {Object} Meeting document
+   * @private
+   */
+  async _getMeetingByIdInternal(meetingId) {
+    try {
+      const meeting = await Meeting.findById(meetingId);
+
+      if (!meeting) {
+        throw new Error('Meeting not found');
+      }
+
+      return meeting;
+    } catch (error) {
+      this.logger.error('Get meeting internal error', {
+        error: error.message,
+        meetingId
+      });
+      throw error;
+    }
+  }
+
+  /**
    * Get meeting by ID
    * @param {string} meetingId - Meeting ID
-   * @param {string} userId - User ID
+   * @param {string} userId - User ID (optional for internal calls)
    * @returns {Object} Meeting details
    */
-  async getMeetingById(meetingId, userId) {
+  async getMeetingById(meetingId, userId = null) {
     try {
+      // If no userId provided, this is an internal call - use internal method
+      if (!userId) {
+        return await this._getMeetingByIdInternal(meetingId);
+      }
+
       const meeting = await Meeting.findById(meetingId).populate('projectId');
 
       if (!meeting) {
@@ -162,7 +191,14 @@ class MeetingService {
       }
 
       // Verify ownership through project
-      if (meeting.projectId.userId.toString() !== userId) {
+      this.logger.debug('Verifying meeting ownership', {
+        meetingId,
+        requestUserId: userId,
+        projectUserId: meeting.projectId.userId.toString(),
+        projectId: meeting.projectId._id.toString()
+      });
+
+      if (meeting.projectId.userId.toString() !== userId.toString()) {
         throw new Error('Access denied');
       }
 
@@ -204,7 +240,7 @@ class MeetingService {
       }
 
       // Verify ownership
-      if (meeting.projectId.userId.toString() !== userId) {
+      if (meeting.projectId.userId.toString() !== userId.toString()) {
         throw new Error('Access denied');
       }
 
@@ -246,7 +282,7 @@ class MeetingService {
       }
 
       // Verify ownership
-      if (meeting.projectId.userId.toString() !== userId) {
+      if (meeting.projectId.userId.toString() !== userId.toString()) {
         throw new Error('Access denied');
       }
 
@@ -299,7 +335,7 @@ class MeetingService {
       }
 
       // Verify ownership
-      if (meeting.projectId.userId.toString() !== userId) {
+      if (meeting.projectId.userId.toString() !== userId.toString()) {
         throw new Error('Access denied');
       }
 
@@ -402,15 +438,41 @@ class MeetingService {
       const audioFilePath = await this._getAudioFilePath(audioFileUri);
       tempFilePath = !audioFileUri.startsWith('local://') ? audioFilePath : null;
 
-      // Call transcription service
-      const segments = await this.transcriptionService.transcribeAudio(audioFilePath);
+      this.logger.debug('Calling transcription service', {
+        audioFilePath,
+        meetingId,
+        serviceType: this.transcriptionService.constructor.name
+      });
 
-      // Save transcription segments to database
-      await this.transcriptionDataService.saveTranscriptions(meetingId, segments);
+      // Call transcription service
+      // For Gemini streaming: service handles incremental saves internally
+      // For mock service: returns all segments at once
+      const segments = await this.transcriptionService.transcribeAudio(
+        audioFilePath,
+        meetingId // Pass meetingId for Gemini streaming progress updates
+      );
+
+      this.logger.debug('Transcription service returned', {
+        meetingId,
+        segmentsCount: segments?.length || 0,
+        segmentsType: typeof segments
+      });
+
+      // For non-streaming providers (mock), save all segments at once
+      if (segments && segments.length > 0) {
+        // Check if segments are already saved (by streaming provider)
+        const existingCount = await this.transcriptionDataService.getTranscriptionCount(meetingId);
+
+        if (existingCount === 0) {
+          // Not saved yet, save them now (mock provider path)
+          await this.transcriptionDataService.saveTranscriptions(meetingId, segments);
+        }
+      }
 
       // Update meeting status to completed
+      // (Gemini streaming already sets this, but safe to set again)
       const meeting = await Meeting.findById(meetingId);
-      if (meeting) {
+      if (meeting && meeting.transcriptionStatus !== 'completed') {
         await meeting.updateTranscriptionProgress('completed', 100);
       }
 
@@ -429,13 +491,18 @@ class MeetingService {
     } catch (error) {
       this.logger.error('Transcription processing failed', {
         error: error.message,
+        stack: error.stack,
         meetingId,
         audioFileUri
       });
 
       // Update meeting status to failed
+      // (Gemini streaming already sets this on error, but safe to set again)
       const meeting = await Meeting.findById(meetingId);
-      if (meeting) {
+      if (meeting && meeting.transcriptionStatus !== 'failed') {
+        meeting.metadata = meeting.metadata || {};
+        meeting.metadata.transcription = meeting.metadata.transcription || {};
+        meeting.metadata.transcription.errorMessage = error.message;
         await meeting.updateTranscriptionProgress('failed', 0);
       }
 
@@ -464,7 +531,14 @@ class MeetingService {
       }
 
       // Verify ownership
-      if (meeting.projectId.userId.toString() !== userId) {
+      this.logger.debug('Verifying audio download ownership', {
+        meetingId,
+        requestUserId: userId,
+        projectUserId: meeting.projectId.userId.toString(),
+        projectId: meeting.projectId._id.toString()
+      });
+
+      if (meeting.projectId.userId.toString() !== userId.toString()) {
         throw new Error('Access denied');
       }
 
@@ -508,7 +582,7 @@ class MeetingService {
       }
 
       // Verify ownership
-      if (meeting.projectId.userId.toString() !== userId) {
+      if (meeting.projectId.userId.toString() !== userId.toString()) {
         throw new Error('Access denied');
       }
 

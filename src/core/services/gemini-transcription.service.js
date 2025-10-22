@@ -1,0 +1,366 @@
+/**
+ * Gemini Transcription Service
+ * Google Gemini 2.5 Pro implementation with streaming API for long audio files
+ * Handles real-time progress updates and incremental segment saving
+ */
+const fs = require('fs');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
+const TranscriptionService = require('./transcription.service');
+
+class GeminiTranscriptionService extends TranscriptionService {
+  constructor(logger, transcriptionDataService, meetingService) {
+    super(logger);
+    this.transcriptionDataService = transcriptionDataService;
+    this.meetingService = meetingService;
+
+    // Configuration
+    this.apiKey = process.env.GEMINI_API_KEY;
+    this.model = process.env.GEMINI_MODEL || 'gemini-2.5-pro';
+    this.streamTimeout = parseInt(process.env.GEMINI_STREAM_TIMEOUT) || 300000; // 5 min
+    this.chunkStallTimeout = parseInt(process.env.GEMINI_CHUNK_STALL_TIMEOUT) || 30000; // 30s
+    this.averageSegmentDuration = parseInt(process.env.AVERAGE_SEGMENT_DURATION) || 5000; // 5s
+
+    if (!this.apiKey) {
+      throw new Error('GEMINI_API_KEY environment variable is required');
+    }
+
+    // Initialize Gemini client
+    this.genAI = new GoogleGenerativeAI(this.apiKey);
+  }
+
+  /**
+   * Transcribe audio file using Gemini streaming API
+   * Processes long audio files without timeout by streaming results
+   * @param {string} audioFilePath - Path to audio file
+   * @param {string} meetingId - Meeting ID for progress tracking
+   * @param {Object} options - Transcription options
+   * @returns {Promise<Array>} Array of transcription segments
+   */
+  async transcribeAudio(audioFilePath, meetingId, options = {}) {
+    try {
+      this.logger.info('Starting Gemini transcription', {
+        audioFilePath,
+        meetingId,
+        model: this.model
+      });
+
+      // Update status to processing
+      await this._updateMeetingStatus(meetingId, 'processing', 0);
+
+      // Get audio file info
+      const audioBuffer = fs.readFileSync(audioFilePath);
+      const mimeType = this._detectMimeType(audioFilePath);
+
+      // Calculate estimated total segments for progress
+      const meeting = await this.meetingService.getMeetingById(meetingId);
+      const estimatedTotal = this._calculateEstimatedSegments(meeting.duration);
+
+      await this._updateTranscriptionMetadata(meetingId, {
+        startedAt: new Date(),
+        estimatedTotal,
+        processedSegments: 0
+      });
+
+      // Initialize Gemini model
+      const model = this.genAI.getGenerativeModel({ model: this.model });
+
+      // Prepare streaming request
+      const prompt = `Transcribe this audio file with speaker diarization and timestamps.
+Return the transcription as a JSON array where each element has:
+- startTime: start timestamp in milliseconds
+- endTime: end timestamp in milliseconds
+- speaker: speaker identifier (e.g., "SPEAKER_01", "SPEAKER_02")
+- text: the transcribed text
+- confidence: confidence score between 0 and 1
+
+Return ONLY the JSON array, no additional text.`;
+
+      const parts = [
+        { text: prompt },
+        {
+          inlineData: {
+            mimeType,
+            data: audioBuffer.toString('base64')
+          }
+        }
+      ];
+
+      // Start streaming
+      const result = await model.generateContentStream({ contents: [{ role: 'user', parts }] });
+
+      const segments = [];
+      let processedSegments = 0;
+      let accumulatedText = '';
+      let lastChunkTime = Date.now();
+
+      // Set up stall detection
+      const stallCheckInterval = setInterval(() => {
+        const elapsed = Date.now() - lastChunkTime;
+        if (elapsed > this.chunkStallTimeout) {
+          this.logger.warn('Stream stalled', {
+            meetingId,
+            elapsedMs: elapsed,
+            processedSegments
+          });
+        }
+      }, this.chunkStallTimeout);
+
+      // Process streaming chunks
+      for await (const chunk of result.stream) {
+        lastChunkTime = Date.now();
+
+        const chunkText = chunk.text();
+        if (!chunkText) continue;
+
+        accumulatedText += chunkText;
+
+        // Try to parse complete JSON segments from accumulated text
+        const parsedSegments = this._parseStreamingChunks(accumulatedText);
+
+        if (parsedSegments.length > 0) {
+          // Process new segments
+          for (const rawSegment of parsedSegments) {
+            const segment = this._mapGeminiSegment(rawSegment);
+            segments.push(segment);
+
+            // Save segment immediately to DB
+            try {
+              await this.transcriptionDataService.saveTranscriptions(meetingId, [segment]);
+              processedSegments++;
+
+              // Update progress
+              const progress = Math.min(95, Math.floor((processedSegments / estimatedTotal) * 100));
+              await this._updateMeetingProgress(meetingId, progress, processedSegments);
+
+              this.logger.debug('Segment saved', {
+                meetingId,
+                segmentIndex: processedSegments,
+                progress
+              });
+            } catch (saveError) {
+              this.logger.error('Error saving segment', {
+                error: saveError.message,
+                meetingId,
+                segmentIndex: processedSegments
+              });
+              // Continue processing other segments
+            }
+          }
+
+          // Clear processed text
+          accumulatedText = '';
+        }
+
+        await this._updateTranscriptionMetadata(meetingId, {
+          lastChunkAt: new Date()
+        });
+      }
+
+      clearInterval(stallCheckInterval);
+
+      // Finalize
+      await this._updateMeetingStatus(meetingId, 'completed', 100);
+      await this._updateTranscriptionMetadata(meetingId, {
+        completedAt: new Date()
+      });
+
+      this.logger.info('Gemini transcription completed', {
+        meetingId,
+        segmentsCount: segments.length,
+        processedSegments
+      });
+
+      return segments;
+
+    } catch (error) {
+      this.logger.error('Gemini transcription error', {
+        error: error.message,
+        stack: error.stack,
+        meetingId,
+        audioFilePath
+      });
+
+      // Update status to failed
+      await this._updateMeetingStatus(meetingId, 'failed', 0, error.message);
+
+      throw error;
+    }
+  }
+
+  /**
+   * Parse streaming chunks to extract complete JSON segments
+   * @param {string} text - Accumulated text from stream
+   * @returns {Array} Parsed segments
+   */
+  _parseStreamingChunks(text) {
+    try {
+      // Remove markdown code blocks if present
+      let cleanText = text.trim();
+      cleanText = cleanText.replace(/```json\n?/g, '').replace(/```\n?/g, '');
+
+      // Try to parse as complete JSON array
+      const parsed = JSON.parse(cleanText);
+
+      if (Array.isArray(parsed)) {
+        return parsed;
+      } else if (typeof parsed === 'object') {
+        return [parsed];
+      }
+
+      return [];
+    } catch (error) {
+      // Not yet a complete JSON, continue accumulating
+      return [];
+    }
+  }
+
+  /**
+   * Map Gemini segment format to application format
+   * @param {Object} geminiSegment - Segment from Gemini API
+   * @returns {Object} Mapped segment
+   */
+  _mapGeminiSegment(geminiSegment) {
+    return {
+      startTime: geminiSegment.startTime || 0,
+      endTime: geminiSegment.endTime || 0,
+      speaker: this._mapSpeakerLabel(geminiSegment.speaker),
+      text: geminiSegment.text || '',
+      confidence: geminiSegment.confidence || null
+    };
+  }
+
+  /**
+   * Map Gemini speaker labels to app format
+   * @param {string} speakerLabel - Gemini speaker label (e.g., "SPEAKER_01")
+   * @returns {string} Mapped speaker name (e.g., "Speaker 1")
+   */
+  _mapSpeakerLabel(speakerLabel) {
+    if (!speakerLabel) return 'Unknown Speaker';
+
+    // Convert SPEAKER_01 → Speaker 1
+    const match = speakerLabel.match(/SPEAKER[_\s](\d+)/i);
+    if (match) {
+      return `Speaker ${parseInt(match[1])}`;
+    }
+
+    return speakerLabel;
+  }
+
+  /**
+   * Calculate estimated number of segments based on audio duration
+   * @param {number} durationSeconds - Audio duration in seconds
+   * @returns {number} Estimated segment count
+   */
+  _calculateEstimatedSegments(durationSeconds) {
+    if (!durationSeconds) return 100; // Default fallback
+
+    const durationMs = durationSeconds * 1000;
+    return Math.ceil(durationMs / this.averageSegmentDuration);
+  }
+
+  /**
+   * Detect MIME type from file extension
+   * @param {string} filePath - Audio file path
+   * @returns {string} MIME type
+   */
+  _detectMimeType(filePath) {
+    const ext = filePath.split('.').pop().toLowerCase();
+
+    const mimeTypes = {
+      'mp3': 'audio/mpeg',
+      'wav': 'audio/wav',
+      'm4a': 'audio/mp4',
+      'webm': 'audio/webm',
+      'ogg': 'audio/ogg'
+    };
+
+    return mimeTypes[ext] || 'audio/mpeg';
+  }
+
+  /**
+   * Update meeting status and progress
+   * @param {string} meetingId - Meeting ID
+   * @param {string} status - New status
+   * @param {number} progress - Progress percentage
+   * @param {string} errorMessage - Optional error message
+   */
+  async _updateMeetingStatus(meetingId, status, progress, errorMessage = null) {
+    try {
+      const meeting = await this.meetingService.getMeetingById(meetingId);
+      meeting.transcriptionStatus = status;
+      meeting.transcriptionProgress = progress;
+
+      if (errorMessage) {
+        meeting.metadata = meeting.metadata || {};
+        meeting.metadata.transcription = meeting.metadata.transcription || {};
+        meeting.metadata.transcription.errorMessage = errorMessage;
+      }
+
+      await meeting.save();
+    } catch (error) {
+      this.logger.error('Error updating meeting status', {
+        error: error.message,
+        meetingId
+      });
+    }
+  }
+
+  /**
+   * Update meeting progress
+   * @param {string} meetingId - Meeting ID
+   * @param {number} progress - Progress percentage
+   * @param {number} processedSegments - Number of processed segments
+   */
+  async _updateMeetingProgress(meetingId, progress, processedSegments) {
+    try {
+      const meeting = await this.meetingService.getMeetingById(meetingId);
+      meeting.transcriptionProgress = progress;
+
+      meeting.metadata = meeting.metadata || {};
+      meeting.metadata.transcription = meeting.metadata.transcription || {};
+      meeting.metadata.transcription.processedSegments = processedSegments;
+
+      await meeting.save();
+    } catch (error) {
+      this.logger.error('Error updating meeting progress', {
+        error: error.message,
+        meetingId
+      });
+    }
+  }
+
+  /**
+   * Update transcription metadata
+   * @param {string} meetingId - Meeting ID
+   * @param {Object} updates - Metadata updates
+   */
+  async _updateTranscriptionMetadata(meetingId, updates) {
+    try {
+      const meeting = await this.meetingService.getMeetingById(meetingId);
+
+      meeting.metadata = meeting.metadata || {};
+      meeting.metadata.transcription = meeting.metadata.transcription || {};
+
+      Object.assign(meeting.metadata.transcription, updates);
+
+      await meeting.save();
+    } catch (error) {
+      this.logger.error('Error updating transcription metadata', {
+        error: error.message,
+        meetingId
+      });
+    }
+  }
+
+  /**
+   * Estimate transcription time based on audio duration
+   * @param {number} audioDuration - Audio duration in seconds
+   * @returns {number} Estimated time in seconds
+   */
+  estimateTranscriptionTime(audioDuration) {
+    // Gemini typically processes at ~0.08x speed (1 hour audio = ~5 minutes)
+    return Math.ceil(audioDuration * 0.08);
+  }
+}
+
+module.exports = GeminiTranscriptionService;

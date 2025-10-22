@@ -15,34 +15,54 @@ class MockTranscriptionService extends TranscriptionService {
    * Mock transcribe audio file
    * Simulates async transcription with realistic data
    * @param {string} audioFilePath - Path to audio file
+   * @param {string} meetingId - Meeting ID (optional, for compatibility)
    * @param {Object} options - Transcription options
    * @returns {Promise<Array>} Array of mock transcription segments
    */
-  async transcribeAudio(audioFilePath, options = {}) {
-    try {
-      this.logger.info('Starting mock transcription', {
-        audioFilePath,
-        delay: this.processingDelay
-      });
+  async transcribeAudio(audioFilePath, meetingId = null, options = {}) {
+    // Handle both old signature (audioFilePath, options) and new signature (audioFilePath, meetingId, options)
+    if (typeof meetingId === 'object' && meetingId !== null) {
+      // Old signature: meetingId is actually options
+      options = meetingId;
+      meetingId = null;
+    }
 
+    this.logger.info('Starting mock transcription', {
+      audioFilePath,
+      meetingId,
+      delay: this.processingDelay,
+      optionsType: typeof options,
+      optionsKeys: options ? Object.keys(options) : []
+    });
+
+    try {
       // Simulate processing delay
+      this.logger.debug('Simulating processing delay', { delay: this.processingDelay });
       await this._simulateProcessing(this.processingDelay);
 
       // Generate mock transcription segments
+      this.logger.debug('Generating mock segments', { options });
       const segments = this._generateMockSegments(options);
 
       this.logger.info('Mock transcription completed', {
         audioFilePath,
+        meetingId,
         segmentsCount: segments.length
       });
 
       return segments;
-    } catch (error) {
+    } catch (err) {
+      // Use console.error as fallback in case logger has issues
+      console.error('Mock transcription error:', err);
+
       this.logger.error('Mock transcription error', {
-        error: error.message,
-        audioFilePath
+        errorMessage: err && err.message ? err.message : String(err),
+        errorStack: err && err.stack ? err.stack : 'No stack trace',
+        errorType: typeof err,
+        audioFilePath,
+        meetingId
       });
-      throw error;
+      throw err;
     }
   }
 
