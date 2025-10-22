@@ -6,10 +6,11 @@ const Meeting = require('../../models/meeting.model');
 const Project = require('../../models/project.model');
 const mongoose = require('mongoose');
 const path = require('path');
+const BaseService = require('./base.service');
 
-class MeetingService {
+class MeetingService extends BaseService {
   constructor(logger, fileService, projectService, transcriptionService, transcriptionDataService, audioStorageProvider) {
-    this.logger = logger;
+    super(logger);
     this.fileService = fileService;
     this.projectService = projectService;
     this.transcriptionService = transcriptionService;
@@ -70,7 +71,7 @@ class MeetingService {
 
       await meeting.save();
 
-      this.logger.info('Meeting created', {
+      this.logSuccess('Meeting created', {
         meetingId: meeting._id,
         projectId,
         userId,
@@ -79,12 +80,7 @@ class MeetingService {
 
       return meeting.toSafeObject();
     } catch (error) {
-      this.logger.error('Create meeting error', {
-        error: error.message,
-        projectId,
-        userId
-      });
-      throw error;
+      this.logAndThrow(error, 'Create meeting', { projectId, userId });
     }
   }
 
@@ -129,7 +125,7 @@ class MeetingService {
         page: result.pagination.page
       });
 
-      this.logger.info('Meetings retrieved', {
+      this.logSuccess('Meetings retrieved', {
         projectId,
         userId,
         count: result.meetings.length,
@@ -138,12 +134,7 @@ class MeetingService {
 
       return result;
     } catch (error) {
-      this.logger.error('Get meetings error', {
-        error: error.message,
-        projectId,
-        userId
-      });
-      throw error;
+      this.logAndThrow(error, 'Get meetings', { projectId, userId });
     }
   }
 
@@ -163,11 +154,7 @@ class MeetingService {
 
       return meeting;
     } catch (error) {
-      this.logger.error('Get meeting internal error', {
-        error: error.message,
-        meetingId
-      });
-      throw error;
+      this.logAndThrow(error, 'Get meeting internal', { meetingId });
     }
   }
 
@@ -208,19 +195,14 @@ class MeetingService {
       const meetingData = meeting.toSafeObject();
       meetingData.transcriptionsCount = transcriptionsCount;
 
-      this.logger.info('Meeting retrieved', {
+      this.logSuccess('Meeting retrieved', {
         meetingId,
         userId
       });
 
       return meetingData;
     } catch (error) {
-      this.logger.error('Get meeting error', {
-        error: error.message,
-        meetingId,
-        userId
-      });
-      throw error;
+      this.logAndThrow(error, 'Get meeting by ID', { meetingId, userId });
     }
   }
 
@@ -251,19 +233,14 @@ class MeetingService {
 
       await meeting.save();
 
-      this.logger.info('Meeting updated', {
+      this.logSuccess('Meeting updated', {
         meetingId,
         userId
       });
 
       return meeting.toSafeObject();
     } catch (error) {
-      this.logger.error('Update meeting error', {
-        error: error.message,
-        meetingId,
-        userId
-      });
-      throw error;
+      this.logAndThrow(error, 'Update meeting', { meetingId, userId });
     }
   }
 
@@ -302,7 +279,7 @@ class MeetingService {
       // Delete meeting
       await meeting.deleteOne();
 
-      this.logger.info('Meeting deleted', {
+      this.logSuccess('Meeting deleted', {
         meetingId,
         userId
       });
@@ -311,12 +288,7 @@ class MeetingService {
         message: 'Meeting and associated data deleted successfully'
       };
     } catch (error) {
-      this.logger.error('Delete meeting error', {
-        error: error.message,
-        meetingId,
-        userId
-      });
-      throw error;
+      this.logAndThrow(error, 'Delete meeting', { meetingId, userId });
     }
   }
 
@@ -351,7 +323,7 @@ class MeetingService {
       // Update status to processing
       await meeting.updateTranscriptionProgress('processing', 0);
 
-      this.logger.info('Transcription started', {
+      this.logSuccess('Transcription started', {
         meetingId,
         userId
       });
@@ -371,12 +343,7 @@ class MeetingService {
         estimatedCompletionTime: new Date(Date.now() + this.transcriptionService.estimateTranscriptionTime(meeting.duration || 60) * 1000)
       };
     } catch (error) {
-      this.logger.error('Start transcription error', {
-        error: error.message,
-        meetingId,
-        userId
-      });
-      throw error;
+      this.logAndThrow(error, 'Start transcription', { meetingId, userId });
     }
   }
 
@@ -545,7 +512,7 @@ class MeetingService {
       // Download file from storage
       const fileData = await this.audioStorageProvider.download(meeting.audioFile);
 
-      this.logger.info('Meeting audio file downloaded', {
+      this.logSuccess('Meeting audio file downloaded', {
         meetingId,
         userId,
         fileSize: fileData.length
@@ -558,12 +525,7 @@ class MeetingService {
         size: fileData.length
       };
     } catch (error) {
-      this.logger.error('Download audio file error', {
-        error: error.message,
-        meetingId,
-        userId
-      });
-      throw error;
+      this.logAndThrow(error, 'Download audio file', { meetingId, userId });
     }
   }
 
@@ -597,12 +559,7 @@ class MeetingService {
           : null
       };
     } catch (error) {
-      this.logger.error('Get transcription status error', {
-        error: error.message,
-        meetingId,
-        userId
-      });
-      throw error;
+      this.logAndThrow(error, 'Get transcription status', { meetingId, userId });
     }
   }
 }

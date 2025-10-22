@@ -4,10 +4,11 @@
  */
 const jwt = require('jsonwebtoken');
 const User = require('../../models/user.model');
+const BaseService = require('./base.service');
 
-class AuthService {
+class AuthService extends BaseService {
   constructor(logger) {
-    this.logger = logger;
+    super(logger);
   }
 
   /**
@@ -59,7 +60,7 @@ class AuthService {
 
       await user.save();
 
-      this.logger.info('User registered successfully', { userId: user._id, email: user.email });
+      this.logSuccess('User registered successfully', { userId: user._id, email: user.email });
 
       // Generate token
       const token = this.generateToken({
@@ -72,8 +73,7 @@ class AuthService {
         token
       };
     } catch (error) {
-      this.logger.error('Signup error', { error: error.message });
-      throw error;
+      this.logAndThrow(error, 'Signup');
     }
   }
 
@@ -108,7 +108,7 @@ class AuthService {
         throw new Error('Invalid email or password');
       }
 
-      this.logger.info('User logged in successfully', { userId: user._id, email: user.email });
+      this.logSuccess('User logged in successfully', { userId: user._id, email: user.email });
 
       // Generate token
       const token = this.generateToken({
@@ -121,8 +121,7 @@ class AuthService {
         token
       };
     } catch (error) {
-      this.logger.error('Login error', { error: error.message });
-      throw error;
+      this.logAndThrow(error, 'Login');
     }
   }
 
@@ -148,7 +147,7 @@ class AuthService {
           await user.save();
         }
 
-        this.logger.info('User logged in with Google', { userId: user._id, email: user.email });
+        this.logSuccess('User logged in with Google', { userId: user._id, email: user.email });
       } else {
         // Create new user
         user = new User({
@@ -161,7 +160,7 @@ class AuthService {
 
         await user.save();
 
-        this.logger.info('User registered with Google', { userId: user._id, email: user.email });
+        this.logSuccess('User registered with Google', { userId: user._id, email: user.email });
       }
 
       // Check if user is active
@@ -180,8 +179,7 @@ class AuthService {
         token
       };
     } catch (error) {
-      this.logger.error('Google auth error', { error: error.message });
-      throw error;
+      this.logAndThrow(error, 'Google auth');
     }
   }
 
@@ -198,8 +196,7 @@ class AuthService {
       }
       return user.toSafeObject();
     } catch (error) {
-      this.logger.error('Get user error', { error: error.message, userId });
-      throw error;
+      this.logAndThrow(error, 'Get user by ID', { userId });
     }
   }
 }

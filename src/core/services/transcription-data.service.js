@@ -3,10 +3,11 @@
  * Database operations for transcription segments
  */
 const Transcription = require('../../models/transcription.model');
+const BaseService = require('./base.service');
 
-class TranscriptionDataService {
+class TranscriptionDataService extends BaseService {
   constructor(logger) {
-    this.logger = logger;
+    super(logger);
   }
 
   /**
@@ -31,19 +32,14 @@ class TranscriptionDataService {
       // Bulk insert
       const savedTranscriptions = await Transcription.bulkInsert(transcriptions);
 
-      this.logger.info('Transcriptions saved', {
+      this.logSuccess('Transcriptions saved', {
         meetingId,
         count: savedTranscriptions.length
       });
 
       return savedTranscriptions;
     } catch (error) {
-      this.logger.error('Save transcriptions error', {
-        error: error.message,
-        meetingId,
-        segmentCount: segments.length
-      });
-      throw error;
+      this.logAndThrow(error, 'Save transcriptions', { meetingId, segmentCount: segments.length });
     }
   }
 
@@ -66,7 +62,7 @@ class TranscriptionDataService {
         { page: parseInt(page), limit: parseInt(limit), sort }
       );
 
-      this.logger.info('Transcriptions retrieved', {
+      this.logSuccess('Transcriptions retrieved', {
         meetingId,
         count: result.transcriptions.length,
         page
@@ -74,11 +70,7 @@ class TranscriptionDataService {
 
       return result;
     } catch (error) {
-      this.logger.error('Get transcriptions error', {
-        error: error.message,
-        meetingId
-      });
-      throw error;
+      this.logAndThrow(error, 'Get transcriptions', { meetingId });
     }
   }
 
@@ -97,11 +89,7 @@ class TranscriptionDataService {
 
       return transcription.toSafeObject();
     } catch (error) {
-      this.logger.error('Get transcription error', {
-        error: error.message,
-        transcriptionId
-      });
-      throw error;
+      this.logAndThrow(error, 'Get transcription by ID', { transcriptionId });
     }
   }
 
@@ -130,18 +118,14 @@ class TranscriptionDataService {
       // Mark as edited
       await transcription.markAsEdited();
 
-      this.logger.info('Transcription updated', {
+      this.logSuccess('Transcription updated', {
         transcriptionId,
         isEdited: transcription.isEdited
       });
 
       return transcription.toSafeObject();
     } catch (error) {
-      this.logger.error('Update transcription error', {
-        error: error.message,
-        transcriptionId
-      });
-      throw error;
+      this.logAndThrow(error, 'Update transcription', { transcriptionId });
     }
   }
 
@@ -154,7 +138,7 @@ class TranscriptionDataService {
     try {
       const result = await Transcription.deleteMany({ meetingId });
 
-      this.logger.info('Transcriptions deleted', {
+      this.logSuccess('Transcriptions deleted', {
         meetingId,
         deletedCount: result.deletedCount
       });
@@ -163,11 +147,7 @@ class TranscriptionDataService {
         deletedCount: result.deletedCount
       };
     } catch (error) {
-      this.logger.error('Delete transcriptions error', {
-        error: error.message,
-        meetingId
-      });
-      throw error;
+      this.logAndThrow(error, 'Delete transcriptions', { meetingId });
     }
   }
 
@@ -181,11 +161,7 @@ class TranscriptionDataService {
       const count = await Transcription.countDocuments({ meetingId });
       return count;
     } catch (error) {
-      this.logger.error('Get transcription count error', {
-        error: error.message,
-        meetingId
-      });
-      throw error;
+      this.logAndThrow(error, 'Get transcription count', { meetingId });
     }
   }
 
@@ -214,7 +190,7 @@ class TranscriptionDataService {
         { page: parseInt(page), limit: parseInt(limit), sort }
       );
 
-      this.logger.info('Transcriptions searched', {
+      this.logSuccess('Transcriptions searched', {
         meetingId,
         searchText,
         resultsCount: result.transcriptions.length
@@ -222,12 +198,7 @@ class TranscriptionDataService {
 
       return result;
     } catch (error) {
-      this.logger.error('Search transcriptions error', {
-        error: error.message,
-        meetingId,
-        searchText
-      });
-      throw error;
+      this.logAndThrow(error, 'Search transcriptions', { meetingId, searchText });
     }
   }
 
@@ -256,7 +227,7 @@ class TranscriptionDataService {
         { page: parseInt(page), limit: parseInt(limit), sort }
       );
 
-      this.logger.info('Transcriptions by speaker retrieved', {
+      this.logSuccess('Transcriptions by speaker retrieved', {
         meetingId,
         speaker,
         count: result.transcriptions.length
@@ -264,12 +235,7 @@ class TranscriptionDataService {
 
       return result;
     } catch (error) {
-      this.logger.error('Get transcriptions by speaker error', {
-        error: error.message,
-        meetingId,
-        speaker
-      });
-      throw error;
+      this.logAndThrow(error, 'Get transcriptions by speaker', { meetingId, speaker });
     }
   }
 }

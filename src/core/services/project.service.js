@@ -4,10 +4,11 @@
  */
 const Project = require('../../models/project.model');
 const Meeting = require('../../models/meeting.model');
+const BaseService = require('./base.service');
 
-class ProjectService {
+class ProjectService extends BaseService {
   constructor(logger) {
-    this.logger = logger;
+    super(logger);
   }
 
   /**
@@ -28,7 +29,7 @@ class ProjectService {
 
       await project.save();
 
-      this.logger.info('Project created successfully', {
+      this.logSuccess('Project created successfully', {
         projectId: project._id,
         userId,
         name
@@ -36,11 +37,7 @@ class ProjectService {
 
       return project.toSafeObject();
     } catch (error) {
-      this.logger.error('Create project error', {
-        error: error.message,
-        userId
-      });
-      throw error;
+      this.logAndThrow(error, 'Create project', { userId });
     }
   }
 
@@ -63,7 +60,7 @@ class ProjectService {
         { page: parseInt(page), limit: parseInt(limit), sort }
       );
 
-      this.logger.info('Projects retrieved', {
+      this.logSuccess('Projects retrieved', {
         userId,
         count: result.projects.length,
         page
@@ -71,11 +68,7 @@ class ProjectService {
 
       return result;
     } catch (error) {
-      this.logger.error('Get projects error', {
-        error: error.message,
-        userId
-      });
-      throw error;
+      this.logAndThrow(error, 'Get projects', { userId });
     }
   }
 
@@ -102,19 +95,14 @@ class ProjectService {
       const projectData = project.toSafeObject();
       projectData.meetingsCount = meetingsCount;
 
-      this.logger.info('Project retrieved', {
+      this.logSuccess('Project retrieved', {
         projectId,
         userId
       });
 
       return projectData;
     } catch (error) {
-      this.logger.error('Get project error', {
-        error: error.message,
-        projectId,
-        userId
-      });
-      throw error;
+      this.logAndThrow(error, 'Get project by ID', { projectId, userId });
     }
   }
 
@@ -146,19 +134,14 @@ class ProjectService {
 
       await project.save();
 
-      this.logger.info('Project updated', {
+      this.logSuccess('Project updated', {
         projectId,
         userId
       });
 
       return project.toSafeObject();
     } catch (error) {
-      this.logger.error('Update project error', {
-        error: error.message,
-        projectId,
-        userId
-      });
-      throw error;
+      this.logAndThrow(error, 'Update project', { projectId, userId });
     }
   }
 
@@ -190,7 +173,7 @@ class ProjectService {
       // Delete the project
       await project.deleteOne();
 
-      this.logger.info('Project deleted', {
+      this.logSuccess('Project deleted', {
         projectId,
         userId,
         meetingsDeleted: meetings.length
@@ -201,12 +184,7 @@ class ProjectService {
         deletedMeetings: meetings.length
       };
     } catch (error) {
-      this.logger.error('Delete project error', {
-        error: error.message,
-        projectId,
-        userId
-      });
-      throw error;
+      this.logAndThrow(error, 'Delete project', { projectId, userId });
     }
   }
 
@@ -225,12 +203,7 @@ class ProjectService {
 
       return !!project;
     } catch (error) {
-      this.logger.error('Verify ownership error', {
-        error: error.message,
-        projectId,
-        userId
-      });
-      return false;
+      this.logAndThrow(error, 'Verify ownership', { projectId, userId });
     }
   }
 
@@ -264,12 +237,7 @@ class ProjectService {
 
       return stats;
     } catch (error) {
-      this.logger.error('Get project stats error', {
-        error: error.message,
-        projectId,
-        userId
-      });
-      throw error;
+      this.logAndThrow(error, 'Get project stats', { projectId, userId });
     }
   }
 }
