@@ -2,11 +2,13 @@
  * Authentication Controller
  * Handles HTTP requests for authentication endpoints
  */
+const BaseController = require('./base.controller');
+const { ConflictError, UnauthorizedError } = require('../../utils/errors');
 
-class AuthController {
+class AuthController extends BaseController {
   constructor(authService, logger) {
+    super(authService, logger);
     this.authService = authService;
-    this.logger = logger;
   }
 
   /**
@@ -44,31 +46,10 @@ class AuthController {
    *       409:
    *         description: User already exists
    */
-  signup = async (req, res) => {
-    try {
-      const result = await this.authService.signup(req.body);
-
-      res.status(201).json({
-        success: true,
-        message: 'User registered successfully',
-        data: result
-      });
-    } catch (error) {
-      this.logger.error('Signup controller error', { error: error.message });
-
-      if (error.message.includes('already exists')) {
-        return res.status(409).json({
-          success: false,
-          message: error.message
-        });
-      }
-
-      res.status(400).json({
-        success: false,
-        message: error.message
-      });
-    }
-  };
+  signup = this.asyncHandler(async (req, res) => {
+    const result = await this.authService.signup(req.body);
+    return this.sendCreated(res, result, 'User registered successfully');
+  });
 
   /**
    * @swagger
@@ -98,24 +79,10 @@ class AuthController {
    *       401:
    *         description: Invalid credentials
    */
-  login = async (req, res) => {
-    try {
-      const result = await this.authService.login(req.body);
-
-      res.status(200).json({
-        success: true,
-        message: 'Login successful',
-        data: result
-      });
-    } catch (error) {
-      this.logger.error('Login controller error', { error: error.message });
-
-      res.status(401).json({
-        success: false,
-        message: error.message
-      });
-    }
-  };
+  login = this.asyncHandler(async (req, res) => {
+    const result = await this.authService.login(req.body);
+    return this.sendSuccess(res, result, 'Login successful');
+  });
 
   /**
    * @swagger
@@ -131,52 +98,28 @@ class AuthController {
    *       401:
    *         description: Unauthorized
    */
-  getProfile = async (req, res) => {
-    try {
-      res.status(200).json({
-        success: true,
-        data: req.user.toSafeObject()
-      });
-    } catch (error) {
-      this.logger.error('Get profile error', { error: error.message });
-
-      res.status(500).json({
-        success: false,
-        message: 'Error fetching profile'
-      });
-    }
-  };
+  getProfile = this.asyncHandler(async (req, res) => {
+    return this.sendSuccess(res, req.user.toSafeObject());
+  });
 
   /**
    * Google OAuth callback handler
    */
-  googleCallback = async (req, res) => {
-    try {
-      // User is attached by passport
-      const result = await this.authService.googleAuth(req.user);
+  googleCallback = this.asyncHandler(async (req, res) => {
+    // User is attached by passport
+    const result = await this.authService.googleAuth(req.user);
 
-      // Redirect to frontend with token
-      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3001';
-      res.redirect(`${frontendUrl}/auth/callback?token=${result.token}`);
-    } catch (error) {
-      this.logger.error('Google callback error', { error: error.message });
-
-      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3001';
-      res.redirect(`${frontendUrl}/auth/error?message=${encodeURIComponent(error.message)}`);
-    }
-  };
+    // Redirect to frontend with token
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3001';
+    res.redirect(`${frontendUrl}/auth/callback?token=${result.token}`);
+  });
 
   /**
    * Google OAuth failure handler
    */
-  googleFailure = (req, res) => {
-    this.logger.error('Google OAuth failed');
-
-    res.status(401).json({
-      success: false,
-      message: 'Google authentication failed'
-    });
-  };
+  googleFailure = this.asyncHandler(async (req, res) => {
+    throw new UnauthorizedError('Google authentication failed');
+  });
 }
 
 module.exports = AuthController;
