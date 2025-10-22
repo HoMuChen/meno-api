@@ -21,44 +21,264 @@ const createMeetingRoutes = (meetingController) => {
   router.use(authenticate);
 
   /**
-   * Create a new meeting with audio file
-   * POST /api/projects/:projectId/meetings
+   * @swagger
+   * /api/projects/{projectId}/meetings:
+   *   post:
+   *     summary: Create a new meeting with audio file
+   *     description: Upload audio file and create a meeting record
+   *     tags: [Meetings]
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: projectId
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: Project ID
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         multipart/form-data:
+   *           schema:
+   *             type: object
+   *             required:
+   *               - audioFile
+   *               - title
+   *             properties:
+   *               audioFile:
+   *                 type: string
+   *                 format: binary
+   *                 description: Audio file (MP3, WAV, M4A, WebM, OGG - max 100MB)
+   *               title:
+   *                 type: string
+   *                 minLength: 2
+   *                 maxLength: 200
+   *                 example: "Weekly Team Standup"
+   *               recordingType:
+   *                 type: string
+   *                 enum: [upload, direct]
+   *                 default: upload
+   *     responses:
+   *       201:
+   *         description: Meeting created successfully
+   *       400:
+   *         description: Validation error or invalid file
+   *       401:
+   *         description: Unauthorized
+   *       404:
+   *         description: Project not found
    */
   router.post('/', uploadAudio, validateCreateMeeting, meetingController.create);
 
   /**
-   * Get meetings in a project (paginated)
-   * GET /api/projects/:projectId/meetings?page=1&limit=10&sort=-createdAt
+   * @swagger
+   * /api/projects/{projectId}/meetings:
+   *   get:
+   *     summary: Get meetings in a project
+   *     description: Retrieve paginated list of meetings for a project
+   *     tags: [Meetings]
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: projectId
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: Project ID
+   *       - in: query
+   *         name: page
+   *         schema:
+   *           type: integer
+   *           default: 1
+   *       - in: query
+   *         name: limit
+   *         schema:
+   *           type: integer
+   *           default: 10
+   *       - in: query
+   *         name: sort
+   *         schema:
+   *           type: string
+   *           default: "-createdAt"
+   *     responses:
+   *       200:
+   *         description: Meetings retrieved successfully
+   *       401:
+   *         description: Unauthorized
+   *       404:
+   *         description: Project not found
    */
   router.get('/', meetingController.list);
 
   /**
-   * Get meeting by ID
-   * GET /api/projects/:projectId/meetings/:id
+   * @swagger
+   * /api/projects/{projectId}/meetings/{id}:
+   *   get:
+   *     summary: Get meeting by ID
+   *     description: Retrieve specific meeting details
+   *     tags: [Meetings]
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: projectId
+   *         required: true
+   *         schema:
+   *           type: string
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: Meeting ID
+   *     responses:
+   *       200:
+   *         description: Meeting retrieved successfully
+   *       401:
+   *         description: Unauthorized
+   *       404:
+   *         description: Meeting not found
    */
   router.get('/:id', meetingController.getById);
 
   /**
-   * Update meeting
-   * PUT /api/projects/:projectId/meetings/:id
+   * @swagger
+   * /api/projects/{projectId}/meetings/{id}:
+   *   put:
+   *     summary: Update meeting
+   *     description: Update meeting title
+   *     tags: [Meetings]
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: projectId
+   *         required: true
+   *         schema:
+   *           type: string
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: Meeting ID
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             properties:
+   *               title:
+   *                 type: string
+   *                 minLength: 2
+   *                 maxLength: 200
+   *     responses:
+   *       200:
+   *         description: Meeting updated successfully
+   *       400:
+   *         description: Validation error
+   *       401:
+   *         description: Unauthorized
+   *       404:
+   *         description: Meeting not found
    */
   router.put('/:id', validateUpdateMeeting, meetingController.update);
 
   /**
-   * Delete meeting
-   * DELETE /api/projects/:projectId/meetings/:id
+   * @swagger
+   * /api/projects/{projectId}/meetings/{id}:
+   *   delete:
+   *     summary: Delete meeting
+   *     description: Delete meeting, audio file, and all transcriptions
+   *     tags: [Meetings]
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: projectId
+   *         required: true
+   *         schema:
+   *           type: string
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: Meeting ID
+   *     responses:
+   *       200:
+   *         description: Meeting deleted successfully
+   *       401:
+   *         description: Unauthorized
+   *       404:
+   *         description: Meeting not found
    */
   router.delete('/:id', meetingController.delete);
 
   /**
-   * Start transcription for meeting
-   * POST /api/projects/:projectId/meetings/:id/transcribe
+   * @swagger
+   * /api/projects/{projectId}/meetings/{id}/transcribe:
+   *   post:
+   *     summary: Start transcription for meeting
+   *     description: Begin async transcription process for meeting audio
+   *     tags: [Meetings]
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: projectId
+   *         required: true
+   *         schema:
+   *           type: string
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: Meeting ID
+   *     responses:
+   *       202:
+   *         description: Transcription started successfully
+   *       400:
+   *         description: Meeting already transcribed or in progress
+   *       401:
+   *         description: Unauthorized
+   *       404:
+   *         description: Meeting not found
    */
   router.post('/:id/transcribe', meetingController.startTranscription);
 
   /**
-   * Get transcription status
-   * GET /api/projects/:projectId/meetings/:id/status
+   * @swagger
+   * /api/projects/{projectId}/meetings/{id}/status:
+   *   get:
+   *     summary: Get transcription status
+   *     description: Check transcription progress and status
+   *     tags: [Meetings]
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: projectId
+   *         required: true
+   *         schema:
+   *           type: string
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: Meeting ID
+   *     responses:
+   *       200:
+   *         description: Status retrieved successfully
+   *       401:
+   *         description: Unauthorized
+   *       404:
+   *         description: Meeting not found
    */
   router.get('/:id/status', meetingController.getStatus);
 

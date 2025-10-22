@@ -24,32 +24,194 @@ const createTranscriptionRoutes = (transcriptionController) => {
   router.use(authenticate);
 
   /**
-   * Search transcriptions by text
-   * GET /api/meetings/:meetingId/transcriptions/search?q=keyword
+   * @swagger
+   * /api/meetings/{meetingId}/transcriptions/search:
+   *   get:
+   *     summary: Search transcriptions by text
+   *     description: Search transcription text content with keyword
+   *     tags: [Transcriptions]
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: meetingId
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: Meeting ID
+   *       - in: query
+   *         name: q
+   *         required: true
+   *         schema:
+   *           type: string
+   *           maxLength: 200
+   *         description: Search query keyword
+   *     responses:
+   *       200:
+   *         description: Search results retrieved successfully
+   *       400:
+   *         description: Invalid search query
+   *       401:
+   *         description: Unauthorized
+   *       404:
+   *         description: Meeting not found
    */
   router.get('/search', validateSearchQuery, transcriptionController.search);
 
   /**
-   * Get transcriptions by speaker
-   * GET /api/meetings/:meetingId/transcriptions/speaker/:speaker
+   * @swagger
+   * /api/meetings/{meetingId}/transcriptions/speaker/{speaker}:
+   *   get:
+   *     summary: Get transcriptions by speaker
+   *     description: Filter transcriptions by speaker name
+   *     tags: [Transcriptions]
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: meetingId
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: Meeting ID
+   *       - in: path
+   *         name: speaker
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: Speaker name
+   *     responses:
+   *       200:
+   *         description: Speaker transcriptions retrieved successfully
+   *       401:
+   *         description: Unauthorized
+   *       404:
+   *         description: Meeting not found
    */
   router.get('/speaker/:speaker', transcriptionController.getBySpeaker);
 
   /**
-   * Get all transcriptions for a meeting (paginated)
-   * GET /api/meetings/:meetingId/transcriptions?page=1&limit=50&sort=startTime
+   * @swagger
+   * /api/meetings/{meetingId}/transcriptions:
+   *   get:
+   *     summary: Get all transcriptions for a meeting
+   *     description: Retrieve paginated list of transcription segments
+   *     tags: [Transcriptions]
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: meetingId
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: Meeting ID
+   *       - in: query
+   *         name: page
+   *         schema:
+   *           type: integer
+   *           default: 1
+   *       - in: query
+   *         name: limit
+   *         schema:
+   *           type: integer
+   *           default: 50
+   *           maximum: 100
+   *       - in: query
+   *         name: sort
+   *         schema:
+   *           type: string
+   *           default: "startTime"
+   *     responses:
+   *       200:
+   *         description: Transcriptions retrieved successfully
+   *       400:
+   *         description: Invalid pagination parameters
+   *       401:
+   *         description: Unauthorized
+   *       404:
+   *         description: Meeting not found
    */
   router.get('/', validatePagination, transcriptionController.list);
 
   /**
-   * Get transcription by ID
-   * GET /api/meetings/:meetingId/transcriptions/:id
+   * @swagger
+   * /api/meetings/{meetingId}/transcriptions/{id}:
+   *   get:
+   *     summary: Get transcription by ID
+   *     description: Retrieve a specific transcription segment
+   *     tags: [Transcriptions]
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: meetingId
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: Meeting ID
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: Transcription ID
+   *     responses:
+   *       200:
+   *         description: Transcription retrieved successfully
+   *       401:
+   *         description: Unauthorized
+   *       404:
+   *         description: Transcription not found
    */
   router.get('/:id', transcriptionController.getById);
 
   /**
-   * Update transcription (edit speaker or text)
-   * PUT /api/meetings/:meetingId/transcriptions/:id
+   * @swagger
+   * /api/meetings/{meetingId}/transcriptions/{id}:
+   *   put:
+   *     summary: Update transcription
+   *     description: Edit transcription speaker name or text content
+   *     tags: [Transcriptions]
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: meetingId
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: Meeting ID
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: Transcription ID
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             properties:
+   *               speaker:
+   *                 type: string
+   *                 maxLength: 100
+   *                 example: "John Doe"
+   *               text:
+   *                 type: string
+   *                 maxLength: 5000
+   *                 example: "We need to prioritize the authentication feature"
+   *     responses:
+   *       200:
+   *         description: Transcription updated successfully
+   *       400:
+   *         description: Validation error
+   *       401:
+   *         description: Unauthorized
+   *       404:
+   *         description: Transcription not found
    */
   router.put('/:id', validateUpdateTranscription, transcriptionController.update);
 
