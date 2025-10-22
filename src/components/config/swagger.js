@@ -23,11 +23,7 @@ const options = {
     servers: [
       {
         url: `http://localhost:${config.port}`,
-        description: 'Root server (for Auth endpoints)'
-      },
-      {
-        url: `http://localhost:${config.port}${config.api.prefix}`,
-        description: 'API server (for Users, Files, Health)'
+        description: 'Development server'
       }
     ],
     tags: [
@@ -46,6 +42,18 @@ const options = {
       {
         name: 'Files',
         description: 'File storage and management endpoints'
+      },
+      {
+        name: 'Projects',
+        description: 'Project management endpoints for organizing meetings'
+      },
+      {
+        name: 'Meetings',
+        description: 'Meeting management endpoints with audio upload and transcription'
+      },
+      {
+        name: 'Transcriptions',
+        description: 'Transcription management endpoints for viewing and editing meeting transcripts'
       }
     ],
     components: {
