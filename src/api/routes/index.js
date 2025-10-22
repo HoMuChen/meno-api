@@ -1,6 +1,6 @@
 /**
  * Routes Index
- * Central routing configuration
+ * Central routing configuration for /api routes
  */
 const express = require('express');
 const createUserRoutes = require('./user.routes');

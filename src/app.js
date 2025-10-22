@@ -3,26 +3,33 @@
  * Configures Express app with middleware, routes, and error handling
  */
 const express = require('express');
+const passport = require('passport');
 const swaggerUi = require('swagger-ui-express');
 const swaggerSpec = require('./components/config/swagger');
 const logger = require('./components/logging');
 const { StorageFactory } = require('./components/storage');
 const config = require('./components/config');
+const configurePassport = require('./components/config/passport');
 const createRoutes = require('./api/routes');
+const createAuthRoutes = require('./api/routes/auth.routes');
 const { errorHandler, notFound } = require('./api/middleware/errorHandler');
 const requestLogger = require('./api/middleware/requestLogger');
 
 // Import services and controllers
-const { UserService, FileService } = require('./core/services');
+const { UserService, FileService, AuthService } = require('./core/services');
 const UserController = require('./api/controllers/user.controller');
 const FileController = require('./api/controllers/file.controller');
 const HealthController = require('./api/controllers/health.controller');
+const AuthController = require('./api/controllers/auth.controller');
 
 /**
  * Create and configure Express app
  */
 const createApp = () => {
   const app = express();
+
+  // Initialize Passport
+  configurePassport();
 
   // Initialize storage provider
   const storageProvider = StorageFactory.create({
@@ -37,15 +44,20 @@ const createApp = () => {
   // Initialize services with dependencies
   const userService = new UserService(logger, storageProvider);
   const fileService = new FileService(logger, storageProvider);
+  const authService = new AuthService(logger);
 
   // Initialize controllers with services
   const userController = new UserController(userService, logger);
   const fileController = new FileController(fileService, logger);
   const healthController = new HealthController(logger);
+  const authController = new AuthController(authService, logger);
 
   // Basic middleware
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
+
+  // Initialize Passport middleware
+  app.use(passport.initialize());
 
   // Request logging
   app.use(requestLogger);
@@ -74,11 +86,15 @@ const createApp = () => {
       message: 'Meno API Server',
       version: '1.0.0',
       documentation: '/api-docs',
-      health: '/api/health'
+      health: '/api/health',
+      auth: '/auth'
     });
   });
 
-  // API routes
+  // Auth routes (at root level)
+  app.use('/auth', createAuthRoutes(authController));
+
+  // API routes (at /api prefix)
   app.use(config.api.prefix, createRoutes({
     userController,
     fileController,

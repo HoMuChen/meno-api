@@ -11,7 +11,7 @@ const options = {
     info: {
       title: 'Meno API',
       version: '1.0.0',
-      description: 'RESTful API built with Express, MongoDB, and clean architecture principles. This API provides endpoints for user management and file storage with support for multiple storage providers (local and Google Cloud Storage).',
+      description: 'RESTful API built with Express, MongoDB, and clean architecture principles. This API provides endpoints for authentication (email/password and Google OAuth), user management, and file storage with support for multiple storage providers (local and Google Cloud Storage).',
       contact: {
         name: 'API Support'
       },
@@ -23,17 +23,21 @@ const options = {
     servers: [
       {
         url: `http://localhost:${config.port}`,
-        description: 'Development server'
+        description: 'Root server (for Auth endpoints)'
       },
       {
         url: `http://localhost:${config.port}${config.api.prefix}`,
-        description: 'API base path'
+        description: 'API server (for Users, Files, Health)'
       }
     ],
     tags: [
       {
         name: 'Health',
         description: 'Health check and monitoring endpoints'
+      },
+      {
+        name: 'Auth',
+        description: 'Authentication endpoints (signup, login, OAuth)'
       },
       {
         name: 'Users',
