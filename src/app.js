@@ -17,10 +17,17 @@ const requestLogger = require('./api/middleware/requestLogger');
 
 // Import services and controllers
 const { UserService, FileService, AuthService } = require('./core/services');
+const ProjectService = require('./core/services/project.service');
+const MeetingService = require('./core/services/meeting.service');
+const TranscriptionDataService = require('./core/services/transcription-data.service');
+const MockTranscriptionService = require('./core/services/mock-transcription.service');
 const UserController = require('./api/controllers/user.controller');
 const FileController = require('./api/controllers/file.controller');
 const HealthController = require('./api/controllers/health.controller');
 const AuthController = require('./api/controllers/auth.controller');
+const ProjectController = require('./api/controllers/project.controller');
+const MeetingController = require('./api/controllers/meeting.controller');
+const TranscriptionController = require('./api/controllers/transcription.controller');
 
 /**
  * Create and configure Express app
@@ -45,12 +52,19 @@ const createApp = () => {
   const userService = new UserService(logger, storageProvider);
   const fileService = new FileService(logger, storageProvider);
   const authService = new AuthService(logger);
+  const projectService = new ProjectService(logger);
+  const transcriptionService = new MockTranscriptionService();
+  const transcriptionDataService = new TranscriptionDataService(logger);
+  const meetingService = new MeetingService(logger, fileService, projectService, transcriptionService, transcriptionDataService);
 
   // Initialize controllers with services
   const userController = new UserController(userService, logger);
   const fileController = new FileController(fileService, logger);
   const healthController = new HealthController(logger);
   const authController = new AuthController(authService, logger);
+  const projectController = new ProjectController(projectService, logger);
+  const meetingController = new MeetingController(meetingService, logger);
+  const transcriptionController = new TranscriptionController(transcriptionDataService, logger);
 
   // Basic middleware
   app.use(express.json());
@@ -98,7 +112,10 @@ const createApp = () => {
   app.use(config.api.prefix, createRoutes({
     userController,
     fileController,
-    healthController
+    healthController,
+    projectController,
+    meetingController,
+    transcriptionController
   }));
 
   // Serve static files (for local storage)
