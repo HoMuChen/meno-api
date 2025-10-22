@@ -2,12 +2,13 @@
  * User Service
  * Core business logic for user operations
  */
+const BaseService = require('./base.service');
 const User = require('../../models/user.model');
 const { NotFoundError, ConflictError } = require('../../utils/errors');
 
-class UserService {
+class UserService extends BaseService {
   constructor(logger, storageProvider) {
-    this.logger = logger;
+    super(logger);
     this.storage = storageProvider;
   }
 
@@ -16,19 +17,18 @@ class UserService {
    */
   async getAllUsers(page = 1, limit = 10) {
     try {
-      const skip = (page - 1) * limit;
+      const { skip, limit: parsedLimit } = this.getPaginationParams(page, limit);
 
       const [users, total] = await Promise.all([
-        User.find().skip(skip).limit(limit).sort({ createdAt: -1 }),
+        User.find().skip(skip).limit(parsedLimit).sort({ createdAt: -1 }),
         User.countDocuments()
       ]);
 
-      this.logger.info('Users retrieved', { count: users.length, total });
+      this.logSuccess('Users retrieved', { count: users.length, total });
 
-      return { users, total, page, limit };
+      return { users, total, page: parseInt(page), limit: parsedLimit };
     } catch (error) {
-      this.logger.error('Failed to get users', { error });
-      throw error;
+      this.logAndThrow(error, 'Get all users', { page, limit });
     }
   }
 
@@ -43,11 +43,10 @@ class UserService {
         throw new NotFoundError(`User not found with ID: ${userId}`);
       }
 
-      this.logger.info('User retrieved', { userId });
+      this.logSuccess('User retrieved', { userId });
       return user;
     } catch (error) {
-      this.logger.error('Failed to get user', { error, userId });
-      throw error;
+      this.logAndThrow(error, 'Get user by ID', { userId });
     }
   }
 
@@ -64,11 +63,10 @@ class UserService {
 
       const user = await User.create(userData);
 
-      this.logger.info('User created', { userId: user._id, email: user.email });
+      this.logSuccess('User created', { userId: user._id, email: user.email });
       return user;
     } catch (error) {
-      this.logger.error('Failed to create user', { error, email: userData.email });
-      throw error;
+      this.logAndThrow(error, 'Create user', { email: userData.email });
     }
   }
 
@@ -97,11 +95,10 @@ class UserService {
         throw new NotFoundError(`User not found with ID: ${userId}`);
       }
 
-      this.logger.info('User updated', { userId });
+      this.logSuccess('User updated', { userId });
       return user;
     } catch (error) {
-      this.logger.error('Failed to update user', { error, userId });
-      throw error;
+      this.logAndThrow(error, 'Update user', { userId });
     }
   }
 
@@ -125,11 +122,10 @@ class UserService {
         }
       }
 
-      this.logger.info('User deleted', { userId });
+      this.logSuccess('User deleted', { userId });
       return user;
     } catch (error) {
-      this.logger.error('Failed to delete user', { error, userId });
-      throw error;
+      this.logAndThrow(error, 'Delete user', { userId });
     }
   }
 
@@ -163,11 +159,10 @@ class UserService {
       user.avatar = result.path;
       await user.save();
 
-      this.logger.info('Avatar uploaded', { userId, path: result.path });
+      this.logSuccess('Avatar uploaded', { userId, path: result.path });
       return user;
     } catch (error) {
-      this.logger.error('Failed to upload avatar', { error, userId });
-      throw error;
+      this.logAndThrow(error, 'Upload avatar', { userId });
     }
   }
 }
