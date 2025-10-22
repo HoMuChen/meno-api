@@ -2,283 +2,115 @@
  * Meeting Controller
  * Handles HTTP requests for meeting endpoints
  */
+const BaseController = require('./base.controller');
+const { BadRequestError } = require('../../utils/errors');
 
-class MeetingController {
+class MeetingController extends BaseController {
   constructor(meetingService, logger) {
+    super(meetingService, logger);
     this.meetingService = meetingService;
-    this.logger = logger;
   }
 
-    /**
-   * Create 
+  /**
+   * Create meeting
    */
-  create = async (req, res) => {
-    try {
-      const userId = req.user._id;
-      const { projectId } = req.params;
-      const meetingData = req.body;
-      const audioFile = req.file;
-
-      if (!audioFile) {
-        return res.status(400).json({
-          success: false,
-          message: 'Audio file is required'
-        });
-      }
-
-      const meeting = await this.meetingService.createMeeting(
-        projectId,
-        userId,
-        meetingData,
-        audioFile
-      );
-
-      res.status(201).json({
-        success: true,
-        message: 'Meeting created successfully',
-        data: meeting
-      });
-    } catch (error) {
-      this.logger.error('Create meeting controller error', {
-        error: error.message,
-        projectId: req.params.projectId,
-        userId: req.user?._id
-      });
-
-      const statusCode = error.message.includes('not found') || error.message.includes('access denied') ? 404 : 400;
-
-      res.status(statusCode).json({
-        success: false,
-        message: error.message
-      });
+  create = this.asyncHandler(async (req, res) => {
+    if (!req.file) {
+      throw new BadRequestError('Audio file is required');
     }
-  };
 
-    /**
-   * list
+    const userId = this.getUserId(req);
+    const { projectId } = req.params;
+    const meeting = await this.meetingService.createMeeting(
+      projectId,
+      userId,
+      req.body,
+      req.file
+    );
+
+    return this.sendCreated(res, meeting, 'Meeting created successfully');
+  });
+
+  /**
+   * List meetings
    */
-  list = async (req, res) => {
-    try {
-      const userId = req.user._id;
-      const { projectId } = req.params;
-      const { page, limit, sort } = req.query;
+  list = this.asyncHandler(async (req, res) => {
+    const userId = this.getUserId(req);
+    const { projectId } = req.params;
+    const { page, limit, sort } = req.query;
 
-      const result = await this.meetingService.getMeetings(projectId, userId, {
-        page,
-        limit,
-        sort
-      });
+    const result = await this.meetingService.getMeetings(projectId, userId, {
+      page,
+      limit,
+      sort
+    });
 
-      res.status(200).json({
-        success: true,
-        data: result
-      });
-    } catch (error) {
-      this.logger.error('List meetings controller error', {
-        error: error.message,
-        projectId: req.params.projectId,
-        userId: req.user?._id
-      });
+    return this.sendSuccess(res, result, 'Meetings retrieved successfully');
+  });
 
-      const statusCode = error.message.includes('not found') || error.message.includes('access denied') ? 404 : 500;
-
-      res.status(statusCode).json({
-        success: false,
-        message: error.message
-      });
-    }
-  };
-
-    /**
-   * Get ById
+  /**
+   * Get meeting by ID
    */
-  getById = async (req, res) => {
-    try {
-      const userId = req.user._id;
-      const { id } = req.params;
+  getById = this.asyncHandler(async (req, res) => {
+    const userId = this.getUserId(req);
+    const meeting = await this.meetingService.getMeetingById(req.params.id, userId);
+    return this.sendSuccess(res, meeting, 'Meeting retrieved successfully');
+  });
 
-      const meeting = await this.meetingService.getMeetingById(id, userId);
-
-      res.status(200).json({
-        success: true,
-        data: meeting
-      });
-    } catch (error) {
-      this.logger.error('Get meeting controller error', {
-        error: error.message,
-        meetingId: req.params.id,
-        userId: req.user?._id
-      });
-
-      const statusCode = error.message.includes('not found') || error.message.includes('Access denied') ? 404 : 500;
-
-      res.status(statusCode).json({
-        success: false,
-        message: error.message
-      });
-    }
-  };
-
-    /**
-   * Update 
+  /**
+   * Update meeting
    */
-  update = async (req, res) => {
-    try {
-      const userId = req.user._id;
-      const { id } = req.params;
-      const updates = req.body;
+  update = this.asyncHandler(async (req, res) => {
+    const userId = this.getUserId(req);
+    const meeting = await this.meetingService.updateMeeting(req.params.id, userId, req.body);
+    return this.sendSuccess(res, meeting, 'Meeting updated successfully');
+  });
 
-      const meeting = await this.meetingService.updateMeeting(id, userId, updates);
-
-      res.status(200).json({
-        success: true,
-        message: 'Meeting updated successfully',
-        data: meeting
-      });
-    } catch (error) {
-      this.logger.error('Update meeting controller error', {
-        error: error.message,
-        meetingId: req.params.id,
-        userId: req.user?._id
-      });
-
-      const statusCode = error.message.includes('not found') || error.message.includes('Access denied') ? 404 : 400;
-
-      res.status(statusCode).json({
-        success: false,
-        message: error.message
-      });
-    }
-  };
-
-    /**
-   * Delete 
+  /**
+   * Delete meeting
    */
-  delete = async (req, res) => {
-    try {
-      const userId = req.user._id;
-      const { id } = req.params;
+  delete = this.asyncHandler(async (req, res) => {
+    const userId = this.getUserId(req);
+    const result = await this.meetingService.deleteMeeting(req.params.id, userId);
+    return this.sendSuccess(res, null, result.message);
+  });
 
-      const result = await this.meetingService.deleteMeeting(id, userId);
-
-      res.status(200).json({
-        success: true,
-        message: result.message
-      });
-    } catch (error) {
-      this.logger.error('Delete meeting controller error', {
-        error: error.message,
-        meetingId: req.params.id,
-        userId: req.user?._id
-      });
-
-      const statusCode = error.message.includes('not found') || error.message.includes('Access denied') ? 404 : 500;
-
-      res.status(statusCode).json({
-        success: false,
-        message: error.message
-      });
-    }
-  };
-
-    /**
-   * Start Transcription
+  /**
+   * Start transcription
    */
-  startTranscription = async (req, res) => {
-    try {
-      const userId = req.user._id;
-      const { id } = req.params;
+  startTranscription = this.asyncHandler(async (req, res) => {
+    const userId = this.getUserId(req);
+    const result = await this.meetingService.startTranscription(req.params.id, userId);
 
-      const result = await this.meetingService.startTranscription(id, userId);
+    // 202 Accepted for async processing
+    return res.status(202).json({
+      success: true,
+      message: 'Transcription started',
+      data: result
+    });
+  });
 
-      res.status(202).json({
-        success: true,
-        message: 'Transcription started',
-        data: result
-      });
-    } catch (error) {
-      this.logger.error('Start transcription controller error', {
-        error: error.message,
-        meetingId: req.params.id,
-        userId: req.user?._id
-      });
-
-      let statusCode = 500;
-      if (error.message.includes('not found') || error.message.includes('Access denied')) {
-        statusCode = 404;
-      } else if (error.message.includes('already')) {
-        statusCode = 400;
-      }
-
-      res.status(statusCode).json({
-        success: false,
-        message: error.message
-      });
-    }
-  };
-
-    /**
-   * Download Audio File
+  /**
+   * Download audio file
    */
-  downloadAudio = async (req, res) => {
-    try {
-      const userId = req.user._id;
-      const { id } = req.params;
+  downloadAudio = this.asyncHandler(async (req, res) => {
+    const userId = this.getUserId(req);
+    const result = await this.meetingService.downloadAudioFile(req.params.id, userId);
 
-      const result = await this.meetingService.downloadAudioFile(id, userId);
+    res.setHeader('Content-Type', result.mimeType);
+    res.setHeader('Content-Length', result.size);
+    res.setHeader('Content-Disposition', `attachment; filename="${result.filename}"`);
+    res.send(result.data);
+  });
 
-      // Set headers for file download
-      res.setHeader('Content-Type', result.mimeType);
-      res.setHeader('Content-Length', result.size);
-      res.setHeader('Content-Disposition', `attachment; filename="${result.filename}"`);
-
-      // Send file data
-      res.status(200).send(result.data);
-    } catch (error) {
-      this.logger.error('Download audio file controller error', {
-        error: error.message,
-        meetingId: req.params.id,
-        userId: req.user?._id
-      });
-
-      const statusCode = error.message.includes('not found') || error.message.includes('Access denied') ? 404 : 500;
-
-      res.status(statusCode).json({
-        success: false,
-        message: error.message
-      });
-    }
-  };
-
-    /**
-   * Get Status
+  /**
+   * Get transcription status
    */
-  getStatus = async (req, res) => {
-    try {
-      const userId = req.user._id;
-      const { id } = req.params;
-
-      const status = await this.meetingService.getTranscriptionStatus(id, userId);
-
-      res.status(200).json({
-        success: true,
-        data: status
-      });
-    } catch (error) {
-      this.logger.error('Get transcription status controller error', {
-        error: error.message,
-        meetingId: req.params.id,
-        userId: req.user?._id
-      });
-
-      const statusCode = error.message.includes('not found') || error.message.includes('Access denied') ? 404 : 500;
-
-      res.status(statusCode).json({
-        success: false,
-        message: error.message
-      });
-    }
-  };
+  getStatus = this.asyncHandler(async (req, res) => {
+    const userId = this.getUserId(req);
+    const status = await this.meetingService.getTranscriptionStatus(req.params.id, userId);
+    return this.sendSuccess(res, status, 'Transcription status retrieved successfully');
+  });
 }
 
 module.exports = MeetingController;
