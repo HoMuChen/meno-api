@@ -78,6 +78,19 @@ class MeetingService extends BaseService {
         audioFileUri: uploadResult.uri
       });
 
+      // Auto-start transcription if configured
+      if (process.env.AUTO_START_TRANSCRIPTION === 'true') {
+        this.logger.info('Auto-starting transcription', { meetingId: meeting._id });
+
+        // Fire and forget - process transcription asynchronously
+        this._processTranscription(meeting._id, uploadResult.uri).catch(error => {
+          this.logger.error('Auto-transcription failed', {
+            error: error.message,
+            meetingId: meeting._id
+          });
+        });
+      }
+
       return meeting.toSafeObject();
     } catch (error) {
       this.logAndThrow(error, 'Create meeting', { projectId, userId });
