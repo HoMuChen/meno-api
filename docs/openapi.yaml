@@ -1534,6 +1534,102 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+  /api/users/{userId}/meetings:
+    get:
+      summary: Get user's recent meetings
+      description: Retrieve paginated list of meetings for a user across all their projects
+      tags:
+        - Users
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema:
+            type: string
+          description: User ID (MongoDB ObjectId)
+          example: 507f1f77bcf86cd799439011
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+          description: Page number for pagination
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 5
+          description: Number of meetings per page
+        - in: query
+          name: sort
+          schema:
+            type: string
+            default: "-createdAt"
+          description: Sort field (prefix with - for descending)
+          example: "-createdAt"
+      responses:
+        '200':
+          description: User meetings retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: User meetings retrieved successfully
+                  data:
+                    type: object
+                    properties:
+                      meetings:
+                        type: array
+                        items:
+                          allOf:
+                            - $ref: '#/components/schemas/Meeting'
+                            - type: object
+                              properties:
+                                projectName:
+                                  type: string
+                                  description: Name of the project the meeting belongs to
+                                  example: Q4 Product Planning
+                      pagination:
+                        type: object
+                        properties:
+                          page:
+                            type: integer
+                            example: 1
+                          limit:
+                            type: integer
+                            example: 5
+                          total:
+                            type: integer
+                            example: 42
+                          pages:
+                            type: integer
+                            example: 9
+        '401':
+          description: Unauthorized - authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
   /auth/signup:
     post:
       summary: Register a new user

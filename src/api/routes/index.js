@@ -16,8 +16,8 @@ const createRoutes = (controllers) => {
   // Health routes
   router.use('/health', createHealthRoutes(controllers.healthController));
 
-  // User routes
-  router.use('/users', createUserRoutes(controllers.userController));
+  // User routes (pass meetingController for user meetings endpoint)
+  router.use('/users', createUserRoutes(controllers.userController, controllers.meetingController));
 
   // File routes
   router.use('/files', createFileRoutes(controllers.fileController));

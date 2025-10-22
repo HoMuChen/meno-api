@@ -593,6 +593,103 @@ class MeetingService extends BaseService {
       this.logAndThrow(error, 'Get transcription status', { meetingId, userId });
     }
   }
+
+  /**
+   * Get user's recent meetings across all projects
+   * @param {string} userId - User ID
+   * @param {Object} options - Query options
+   * @returns {Object} Meetings with pagination
+   */
+  async getUserRecentMeetings(userId, options = {}) {
+    try {
+      const {
+        page = 1,
+        limit = 5,
+        sort = '-createdAt'
+      } = options;
+
+      const skip = (parseInt(page) - 1) * parseInt(limit);
+      const parsedLimit = parseInt(limit);
+
+      // Parse sort string into MongoDB sort object
+      const sortObj = {};
+      const sortFields = sort.split(' ');
+      sortFields.forEach(field => {
+        if (field.startsWith('-')) {
+          sortObj[field.substring(1)] = -1;
+        } else {
+          sortObj[field] = 1;
+        }
+      });
+
+      // Aggregation pipeline to get meetings for user
+      const meetings = await Meeting.aggregate([
+        // Step 1: Lookup project for each meeting
+        {
+          $lookup: {
+            from: 'projects',
+            localField: 'projectId',
+            foreignField: '_id',
+            as: 'project'
+          }
+        },
+        // Step 2: Unwind project array
+        { $unwind: '$project' },
+        // Step 3: Filter by userId
+        {
+          $match: {
+            'project.userId': new mongoose.Types.ObjectId(userId)
+          }
+        },
+        // Step 4: Add project name to output
+        {
+          $addFields: {
+            projectName: '$project.name'
+          }
+        },
+        // Step 5: Remove full project object
+        {
+          $project: {
+            project: 0
+          }
+        },
+        // Step 6: Sort
+        { $sort: sortObj },
+        // Step 7: Count total (before pagination)
+        {
+          $facet: {
+            metadata: [{ $count: 'total' }],
+            data: [
+              { $skip: skip },
+              { $limit: parsedLimit }
+            ]
+          }
+        }
+      ]);
+
+      const total = meetings[0]?.metadata[0]?.total || 0;
+      const data = meetings[0]?.data || [];
+
+      this.logSuccess('User meetings retrieved', {
+        userId,
+        count: data.length,
+        total,
+        page
+      });
+
+      return {
+        meetings: data,
+        pagination: {
+          page: parseInt(page),
+          limit: parsedLimit,
+          total,
+          pages: Math.ceil(total / parsedLimit)
+        }
+      };
+    } catch (error) {
+      this.logAndThrow(error, 'Get user recent meetings', { userId, options });
+    }
+  }
 }
 
 module.exports = MeetingService;

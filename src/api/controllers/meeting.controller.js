@@ -111,6 +111,22 @@ class MeetingController extends BaseController {
     const status = await this.meetingService.getTranscriptionStatus(req.params.id, userId);
     return this.sendSuccess(res, status, 'Transcription status retrieved successfully');
   });
+
+  /**
+   * Get user's recent meetings across all projects
+   */
+  getUserMeetings = this.asyncHandler(async (req, res) => {
+    const { userId } = req.params;
+    const { page, limit, sort } = req.query;
+
+    const result = await this.meetingService.getUserRecentMeetings(userId, {
+      page,
+      limit,
+      sort
+    });
+
+    return this.sendSuccess(res, result, 'User meetings retrieved successfully');
+  });
 }
 
 module.exports = MeetingController;

@@ -6,6 +6,7 @@ const express = require('express');
 const multer = require('multer');
 const validate = require('../middleware/validator');
 const { createUserSchema, updateUserSchema, getUserSchema } = require('../validators/user.validator');
+const { authenticate } = require('../middleware/auth.middleware');
 
 // Configure multer for file uploads
 const upload = multer({
@@ -22,7 +23,7 @@ const upload = multer({
  *   description: User management endpoints
  */
 
-const createUserRoutes = (userController) => {
+const createUserRoutes = (userController, meetingController) => {
   const router = express.Router();
 
   /**
@@ -354,6 +355,49 @@ const createUserRoutes = (userController) => {
     upload.single('avatar'),
     userController.uploadAvatar.bind(userController)
   );
+
+  /**
+   * @swagger
+   * /api/users/{userId}/meetings:
+   *   get:
+   *     summary: Get user's recent meetings
+   *     description: Retrieve paginated list of meetings for a user across all their projects
+   *     tags: [Users]
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: userId
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: User ID
+   *       - in: query
+   *         name: page
+   *         schema:
+   *           type: integer
+   *           default: 1
+   *       - in: query
+   *         name: limit
+   *         schema:
+   *           type: integer
+   *           default: 5
+   *       - in: query
+   *         name: sort
+   *         schema:
+   *           type: string
+   *           default: "-createdAt"
+   *     responses:
+   *       200:
+   *         description: User meetings retrieved successfully
+   *       401:
+   *         description: Unauthorized
+   *       404:
+   *         description: User not found
+   */
+  if (meetingController) {
+    router.get('/:userId/meetings', authenticate, meetingController.getUserMeetings);
+  }
 
   return router;
 };
