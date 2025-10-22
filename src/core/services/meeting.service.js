@@ -4,6 +4,7 @@
  */
 const Meeting = require('../../models/meeting.model');
 const Project = require('../../models/project.model');
+const mongoose = require('mongoose');
 
 class MeetingService {
   constructor(logger, fileService, projectService, transcriptionService, transcriptionDataService) {
@@ -90,10 +91,25 @@ class MeetingService {
         sort = '-createdAt'
       } = options;
 
+      // Debug: Log query details
+      this.logger.debug('getMeetings query preparation', {
+        projectId,
+        projectIdType: typeof projectId,
+        isValidObjectId: mongoose.Types.ObjectId.isValid(projectId)
+      });
+
+      // Convert projectId string to ObjectId for aggregation
       const result = await Meeting.findWithTranscriptionCount(
-        { projectId },
+        { projectId: new mongoose.Types.ObjectId(projectId) },
         { page: parseInt(page), limit: parseInt(limit), sort }
       );
+
+      // Debug: Log query results
+      this.logger.debug('getMeetings query results', {
+        meetingsCount: result.meetings.length,
+        paginationTotal: result.pagination.total,
+        page: result.pagination.page
+      });
 
       this.logger.info('Meetings retrieved', {
         projectId,
@@ -230,7 +246,7 @@ class MeetingService {
       await this.transcriptionDataService.deleteByMeetingId(meetingId);
 
       // Delete meeting
-      await meeting.remove();
+      await meeting.deleteOne();
 
       this.logger.info('Meeting deleted', {
         meetingId,

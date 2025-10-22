@@ -184,11 +184,11 @@ class ProjectService {
       const meetings = await Meeting.find({ projectId });
 
       for (const meeting of meetings) {
-        await meeting.remove();
+        await meeting.deleteOne();
       }
 
       // Delete the project
-      await project.remove();
+      await project.deleteOne();
 
       this.logger.info('Project deleted', {
         projectId,
