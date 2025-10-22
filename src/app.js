@@ -21,7 +21,6 @@ const ProjectService = require('./core/services/project.service');
 const MeetingService = require('./core/services/meeting.service');
 const TranscriptionDataService = require('./core/services/transcription-data.service');
 const TranscriptionServiceFactory = require('./core/services/transcription-service.factory');
-const StorageFactory = require('./core/storage/storage.factory');
 const UserController = require('./api/controllers/user.controller');
 const FileController = require('./api/controllers/file.controller');
 const HealthController = require('./api/controllers/health.controller');
