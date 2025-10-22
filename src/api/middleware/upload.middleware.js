@@ -24,17 +24,38 @@ const storage = multer.diskStorage({
 // File filter - only allow audio files
 const fileFilter = (req, file, cb) => {
   const allowedMimeTypes = [
-    'audio/mpeg',      // MP3
-    'audio/wav',       // WAV
-    'audio/mp4',       // M4A
-    'audio/webm',      // WebM
-    'audio/ogg'        // OGG
+    // MP3
+    'audio/mpeg',
+    'audio/mp3',
+
+    // M4A / AAC (multiple MIME types for cross-platform compatibility)
+    'audio/mp4',
+    'audio/x-m4a',
+    'audio/m4a',
+    'audio/aac',
+    'audio/mp4a-latm',
+
+    // WAV
+    'audio/wav',
+    'audio/x-wav',
+    'audio/wave',
+
+    // WebM
+    'audio/webm',
+
+    // OGG
+    'audio/ogg',
+    'audio/vorbis',
+
+    // FLAC (lossless)
+    'audio/flac',
+    'audio/x-flac'
   ];
 
   if (allowedMimeTypes.includes(file.mimetype)) {
     cb(null, true);
   } else {
-    cb(new Error(`Invalid file type. Allowed types: ${allowedMimeTypes.join(', ')}`), false);
+    cb(new Error(`Invalid file type. Allowed types: MP3, M4A, AAC, WAV, WebM, OGG, FLAC`), false);
   }
 };
 

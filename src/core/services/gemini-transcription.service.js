@@ -285,9 +285,12 @@ Return ONLY the JSON array, no additional text.`;
     const mimeTypes = {
       'mp3': 'audio/mpeg',
       'wav': 'audio/wav',
+      'wave': 'audio/wav',
       'm4a': 'audio/mp4',
+      'aac': 'audio/aac',
       'webm': 'audio/webm',
-      'ogg': 'audio/ogg'
+      'ogg': 'audio/ogg',
+      'flac': 'audio/flac'
     };
 
     return mimeTypes[ext] || 'audio/mpeg';

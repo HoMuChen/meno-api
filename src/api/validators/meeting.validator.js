@@ -68,17 +68,38 @@ const validateAudioFile = (req, res, next) => {
   }
 
   const allowedMimeTypes = [
-    'audio/mpeg',      // MP3
-    'audio/wav',       // WAV
-    'audio/mp4',       // M4A
-    'audio/webm',      // WebM
-    'audio/ogg'        // OGG
+    // MP3
+    'audio/mpeg',
+    'audio/mp3',
+
+    // M4A / AAC (multiple MIME types for cross-platform compatibility)
+    'audio/mp4',
+    'audio/x-m4a',
+    'audio/m4a',
+    'audio/aac',
+    'audio/mp4a-latm',
+
+    // WAV
+    'audio/wav',
+    'audio/x-wav',
+    'audio/wave',
+
+    // WebM
+    'audio/webm',
+
+    // OGG
+    'audio/ogg',
+    'audio/vorbis',
+
+    // FLAC (lossless)
+    'audio/flac',
+    'audio/x-flac'
   ];
 
   if (!allowedMimeTypes.includes(req.file.mimetype)) {
     return res.status(400).json({
       success: false,
-      message: `Invalid audio format. Allowed formats: ${allowedMimeTypes.join(', ')}`
+      message: 'Invalid audio format. Allowed formats: MP3, M4A, AAC, WAV, WebM, OGG, FLAC'
     });
   }
 

@@ -7,6 +7,7 @@ const Project = require('../../models/project.model');
 const mongoose = require('mongoose');
 const path = require('path');
 const BaseService = require('./base.service');
+const { getAudioDuration } = require('../utils/audio-utils');
 
 class MeetingService extends BaseService {
   constructor(logger, fileService, projectService, transcriptionService, transcriptionDataService, audioStorageProvider) {
@@ -40,6 +41,22 @@ class MeetingService extends BaseService {
       const basename = path.basename(audioFile.originalname, ext);
       const storagePath = `meetings/${projectId}/${timestamp}-${basename}${ext}`;
 
+      // Extract audio duration before upload
+      let audioDuration = null;
+      try {
+        audioDuration = await getAudioDuration(audioFile.path);
+        this.logger.info('Audio duration extracted', {
+          duration: audioDuration,
+          audioFile: audioFile.originalname
+        });
+      } catch (error) {
+        this.logger.warn('Failed to extract audio duration', {
+          error: error.message,
+          audioFile: audioFile.originalname
+        });
+        // Continue without duration - it will default to null
+      }
+
       // Upload file to storage provider
       const uploadResult = await this.audioStorageProvider.upload(
         storagePath,
@@ -59,6 +76,7 @@ class MeetingService extends BaseService {
         title: meetingData.title,
         projectId,
         audioFile: uploadResult.uri, // Store URI instead of path
+        duration: audioDuration, // Set extracted duration
         recordingType: meetingData.recordingType || 'upload',
         transcriptionStatus: 'pending',
         transcriptionProgress: 0,
