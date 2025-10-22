@@ -7,7 +7,7 @@ const passport = require('passport');
 const swaggerUi = require('swagger-ui-express');
 const swaggerSpec = require('./components/config/swagger');
 const logger = require('./components/logging');
-const { StorageFactory } = require('./components/storage');
+const StorageFactory = require('./core/storage/storage.factory');
 const config = require('./components/config');
 const configurePassport = require('./components/config/passport');
 const createRoutes = require('./api/routes');
@@ -21,7 +21,7 @@ const ProjectService = require('./core/services/project.service');
 const MeetingService = require('./core/services/meeting.service');
 const TranscriptionDataService = require('./core/services/transcription-data.service');
 const TranscriptionServiceFactory = require('./core/services/transcription-service.factory');
-const AudioStorageFactory = require('./core/storage/storage.factory');
+const StorageFactory = require('./core/storage/storage.factory');
 const UserController = require('./api/controllers/user.controller');
 const FileController = require('./api/controllers/file.controller');
 const HealthController = require('./api/controllers/health.controller');
@@ -40,23 +40,22 @@ const createApp = () => {
   configurePassport();
 
   // Initialize storage provider
-  const storageProvider = StorageFactory.create({
+  const storageProvider = StorageFactory.createProvider(logger, {
     provider: config.storage.provider,
-    localPath: config.storage.localPath,
-    gcsBucket: config.storage.gcsBucket,
-    gcsKeyFile: config.storage.gcsKeyFile
+    basePath: config.storage.localPath,
+    bucket: config.storage.gcsBucket || 'user-files',
+    keyFilename: config.storage.gcsKeyFile
   });
 
   logger.info('Storage provider initialized', { provider: config.storage.provider });
 
   // Initialize audio storage provider for meetings
-  const audioStorageProvider = AudioStorageFactory.createProvider(logger, {
+  const audioStorageProvider = StorageFactory.createProvider(logger, {
     provider: process.env.STORAGE_PROVIDER || 'local',
     basePath: process.env.LOCAL_STORAGE_PATH || './storage',
     bucket: 'audio-files',
     // GCS configuration (if needed in future)
     projectId: process.env.GCS_PROJECT_ID,
-    gcsProject: process.env.GCS_BUCKET,
     keyFilename: process.env.GCS_KEYFILE_PATH
   });
 
