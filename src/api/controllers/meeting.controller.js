@@ -218,6 +218,39 @@ class MeetingController {
   };
 
     /**
+   * Download Audio File
+   */
+  downloadAudio = async (req, res) => {
+    try {
+      const userId = req.user._id;
+      const { id } = req.params;
+
+      const result = await this.meetingService.downloadAudioFile(id, userId);
+
+      // Set headers for file download
+      res.setHeader('Content-Type', result.mimeType);
+      res.setHeader('Content-Length', result.size);
+      res.setHeader('Content-Disposition', `attachment; filename="${result.filename}"`);
+
+      // Send file data
+      res.status(200).send(result.data);
+    } catch (error) {
+      this.logger.error('Download audio file controller error', {
+        error: error.message,
+        meetingId: req.params.id,
+        userId: req.user?._id
+      });
+
+      const statusCode = error.message.includes('not found') || error.message.includes('Access denied') ? 404 : 500;
+
+      res.status(statusCode).json({
+        success: false,
+        message: error.message
+      });
+    }
+  };
+
+    /**
    * Get Status
    */
   getStatus = async (req, res) => {

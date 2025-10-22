@@ -21,6 +21,7 @@ const ProjectService = require('./core/services/project.service');
 const MeetingService = require('./core/services/meeting.service');
 const TranscriptionDataService = require('./core/services/transcription-data.service');
 const MockTranscriptionService = require('./core/services/mock-transcription.service');
+const AudioStorageFactory = require('./core/storage/storage.factory');
 const UserController = require('./api/controllers/user.controller');
 const FileController = require('./api/controllers/file.controller');
 const HealthController = require('./api/controllers/health.controller');
@@ -48,6 +49,21 @@ const createApp = () => {
 
   logger.info('Storage provider initialized', { provider: config.storage.provider });
 
+  // Initialize audio storage provider for meetings
+  const audioStorageProvider = AudioStorageFactory.createProvider(logger, {
+    provider: process.env.STORAGE_PROVIDER || 'local',
+    basePath: process.env.LOCAL_STORAGE_PATH || './storage',
+    bucket: 'audio-files',
+    // GCS configuration (if needed in future)
+    projectId: process.env.GCS_PROJECT_ID,
+    gcsProject: process.env.GCS_BUCKET,
+    keyFilename: process.env.GCS_KEYFILE_PATH
+  });
+
+  logger.info('Audio storage provider initialized', {
+    provider: process.env.STORAGE_PROVIDER || 'local'
+  });
+
   // Initialize services with dependencies
   const userService = new UserService(logger, storageProvider);
   const fileService = new FileService(logger, storageProvider);
@@ -55,7 +71,14 @@ const createApp = () => {
   const projectService = new ProjectService(logger);
   const transcriptionService = new MockTranscriptionService();
   const transcriptionDataService = new TranscriptionDataService(logger);
-  const meetingService = new MeetingService(logger, fileService, projectService, transcriptionService, transcriptionDataService);
+  const meetingService = new MeetingService(
+    logger,
+    fileService,
+    projectService,
+    transcriptionService,
+    transcriptionDataService,
+    audioStorageProvider
+  );
 
   // Initialize controllers with services
   const userController = new UserController(userService, logger);

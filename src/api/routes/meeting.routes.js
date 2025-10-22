@@ -253,6 +253,50 @@ const createMeetingRoutes = (meetingController) => {
 
   /**
    * @swagger
+   * /api/projects/{projectId}/meetings/{id}/download:
+   *   get:
+   *     summary: Download meeting audio file
+   *     description: Download the original audio file for a meeting
+   *     tags: [Meetings]
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: projectId
+   *         required: true
+   *         schema:
+   *           type: string
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: Meeting ID
+   *     responses:
+   *       200:
+   *         description: Audio file downloaded successfully
+   *         content:
+   *           audio/mpeg:
+   *             schema:
+   *               type: string
+   *               format: binary
+   *           audio/wav:
+   *             schema:
+   *               type: string
+   *               format: binary
+   *           audio/mp4:
+   *             schema:
+   *               type: string
+   *               format: binary
+   *       401:
+   *         description: Unauthorized
+   *       404:
+   *         description: Meeting not found
+   */
+  router.get('/:id/download', meetingController.downloadAudio);
+
+  /**
+   * @swagger
    * /api/projects/{projectId}/meetings/{id}/status:
    *   get:
    *     summary: Get transcription status

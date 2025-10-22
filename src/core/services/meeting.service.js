@@ -5,14 +5,16 @@
 const Meeting = require('../../models/meeting.model');
 const Project = require('../../models/project.model');
 const mongoose = require('mongoose');
+const path = require('path');
 
 class MeetingService {
-  constructor(logger, fileService, projectService, transcriptionService, transcriptionDataService) {
+  constructor(logger, fileService, projectService, transcriptionService, transcriptionDataService, audioStorageProvider) {
     this.logger = logger;
     this.fileService = fileService;
     this.projectService = projectService;
     this.transcriptionService = transcriptionService;
     this.transcriptionDataService = transcriptionDataService;
+    this.audioStorageProvider = audioStorageProvider;
   }
 
   /**
@@ -31,20 +33,36 @@ class MeetingService {
         throw new Error('Project not found or access denied');
       }
 
-      // File is already saved by Multer middleware
-      // Just use the file path directly
-      const audioFilePath = audioFile.path;
+      // Generate unique file path for storage
+      const timestamp = Date.now();
+      const ext = path.extname(audioFile.originalname);
+      const basename = path.basename(audioFile.originalname, ext);
+      const storagePath = `meetings/${projectId}/${timestamp}-${basename}${ext}`;
 
-      // Create meeting
+      // Upload file to storage provider
+      const uploadResult = await this.audioStorageProvider.upload(
+        storagePath,
+        audioFile.path, // Multer saved file path
+        {
+          contentType: audioFile.mimetype,
+          metadata: {
+            projectId,
+            userId,
+            originalName: audioFile.originalname
+          }
+        }
+      );
+
+      // Create meeting with storage URI
       const meeting = new Meeting({
         title: meetingData.title,
         projectId,
-        audioFile: audioFilePath,
+        audioFile: uploadResult.uri, // Store URI instead of path
         recordingType: meetingData.recordingType || 'upload',
         transcriptionStatus: 'pending',
         transcriptionProgress: 0,
         metadata: {
-          fileSize: audioFile.size,
+          fileSize: uploadResult.size,
           mimeType: audioFile.mimetype,
           originalName: audioFile.originalname
         }
@@ -56,7 +74,7 @@ class MeetingService {
         meetingId: meeting._id,
         projectId,
         userId,
-        audioFile: audioFilePath
+        audioFileUri: uploadResult.uri
       });
 
       return meeting.toSafeObject();
@@ -232,12 +250,12 @@ class MeetingService {
         throw new Error('Access denied');
       }
 
-      // Delete audio file
+      // Delete audio file from storage
       try {
-        await this.fileService.deleteFile(meeting.audioFile);
+        await this.audioStorageProvider.delete(meeting.audioFile);
       } catch (fileError) {
         this.logger.warn('Failed to delete audio file', {
-          audioFile: meeting.audioFile,
+          audioFileUri: meeting.audioFile,
           error: fileError.message
         });
       }
@@ -327,17 +345,62 @@ class MeetingService {
   }
 
   /**
-   * Process transcription asynchronously
-   * @param {string} meetingId - Meeting ID
-   * @param {string} audioFilePath - Audio file path
+   * Get audio file path for transcription processing
+   * @param {string} audioFileUri - Storage URI
+   * @returns {Promise<string>} Local file path for transcription
    * @private
    */
-  async _processTranscription(meetingId, audioFilePath) {
+  async _getAudioFilePath(audioFileUri) {
+    try {
+      // For local storage, get the absolute path
+      if (audioFileUri.startsWith('local://')) {
+        return this.audioStorageProvider.getAbsolutePath(audioFileUri);
+      }
+
+      // For cloud storage, download to temp location
+      const audioData = await this.audioStorageProvider.download(audioFileUri);
+      const tempPath = path.join(
+        process.env.LOCAL_STORAGE_PATH || './storage',
+        'temp',
+        `transcription-${Date.now()}.audio`
+      );
+
+      // Ensure temp directory exists
+      const fs = require('fs').promises;
+      const tempDir = path.dirname(tempPath);
+      await fs.mkdir(tempDir, { recursive: true });
+
+      // Write to temp file
+      await fs.writeFile(tempPath, audioData);
+
+      return tempPath;
+    } catch (error) {
+      this.logger.error('Failed to get audio file path', {
+        error: error.message,
+        audioFileUri
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Process transcription asynchronously
+   * @param {string} meetingId - Meeting ID
+   * @param {string} audioFileUri - Storage URI for audio file
+   * @private
+   */
+  async _processTranscription(meetingId, audioFileUri) {
+    let tempFilePath = null;
+
     try {
       this.logger.info('Processing transcription', {
         meetingId,
-        audioFilePath
+        audioFileUri
       });
+
+      // Get local file path for transcription
+      const audioFilePath = await this._getAudioFilePath(audioFileUri);
+      tempFilePath = !audioFileUri.startsWith('local://') ? audioFilePath : null;
 
       // Call transcription service
       const segments = await this.transcriptionService.transcribeAudio(audioFilePath);
@@ -355,11 +418,19 @@ class MeetingService {
         meetingId,
         segmentsCount: segments.length
       });
+
+      // Clean up temp file if downloaded
+      if (tempFilePath) {
+        const fs = require('fs').promises;
+        await fs.unlink(tempFilePath).catch(err =>
+          this.logger.warn('Failed to delete temp file', { tempFilePath, error: err.message })
+        );
+      }
     } catch (error) {
       this.logger.error('Transcription processing failed', {
         error: error.message,
         meetingId,
-        audioFilePath
+        audioFileUri
       });
 
       // Update meeting status to failed
@@ -367,6 +438,58 @@ class MeetingService {
       if (meeting) {
         await meeting.updateTranscriptionProgress('failed', 0);
       }
+
+      // Clean up temp file on error
+      if (tempFilePath) {
+        const fs = require('fs').promises;
+        await fs.unlink(tempFilePath).catch(err =>
+          this.logger.warn('Failed to delete temp file', { tempFilePath, error: err.message })
+        );
+      }
+    }
+  }
+
+  /**
+   * Download meeting audio file
+   * @param {string} meetingId - Meeting ID
+   * @param {string} userId - User ID
+   * @returns {Promise<Object>} File data and metadata
+   */
+  async downloadAudioFile(meetingId, userId) {
+    try {
+      const meeting = await Meeting.findById(meetingId).populate('projectId');
+
+      if (!meeting) {
+        throw new Error('Meeting not found');
+      }
+
+      // Verify ownership
+      if (meeting.projectId.userId.toString() !== userId) {
+        throw new Error('Access denied');
+      }
+
+      // Download file from storage
+      const fileData = await this.audioStorageProvider.download(meeting.audioFile);
+
+      this.logger.info('Meeting audio file downloaded', {
+        meetingId,
+        userId,
+        fileSize: fileData.length
+      });
+
+      return {
+        data: fileData,
+        filename: meeting.metadata.originalName || 'audio.mp3',
+        mimeType: meeting.metadata.mimeType || 'audio/mpeg',
+        size: fileData.length
+      };
+    } catch (error) {
+      this.logger.error('Download audio file error', {
+        error: error.message,
+        meetingId,
+        userId
+      });
+      throw error;
     }
   }
 
