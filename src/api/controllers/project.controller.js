@@ -10,36 +10,7 @@ class ProjectController {
   }
 
   /**
-   * @swagger
-   * /projects:
-   *   post:
-   *     summary: Create a new project
-   *     tags: [Projects]
-   *     security:
-   *       - bearerAuth: []
-   *     requestBody:
-   *       required: true
-   *       content:
-   *         application/json:
-   *           schema:
-   *             type: object
-   *             required:
-   *               - name
-   *             properties:
-   *               name:
-   *                 type: string
-   *                 minLength: 2
-   *                 maxLength: 100
-   *               description:
-   *                 type: string
-   *                 maxLength: 500
-   *     responses:
-   *       201:
-   *         description: Project created successfully
-   *       400:
-   *         description: Validation error
-   *       401:
-   *         description: Unauthorized
+   * Create a new project
    */
   create = async (req, res) => {
     try {
@@ -67,34 +38,7 @@ class ProjectController {
   };
 
   /**
-   * @swagger
-   * /projects:
-   *   get:
-   *     summary: Get user's projects
-   *     tags: [Projects]
-   *     security:
-   *       - bearerAuth: []
-   *     parameters:
-   *       - in: query
-   *         name: page
-   *         schema:
-   *           type: integer
-   *           default: 1
-   *       - in: query
-   *         name: limit
-   *         schema:
-   *           type: integer
-   *           default: 10
-   *       - in: query
-   *         name: sort
-   *         schema:
-   *           type: string
-   *           default: -createdAt
-   *     responses:
-   *       200:
-   *         description: Projects retrieved successfully
-   *       401:
-   *         description: Unauthorized
+   * Get user's projects
    */
   list = async (req, res) => {
     try {
@@ -125,26 +69,7 @@ class ProjectController {
   };
 
   /**
-   * @swagger
-   * /projects/{id}:
-   *   get:
-   *     summary: Get project by ID
-   *     tags: [Projects]
-   *     security:
-   *       - bearerAuth: []
-   *     parameters:
-   *       - in: path
-   *         name: id
-   *         required: true
-   *         schema:
-   *           type: string
-   *     responses:
-   *       200:
-   *         description: Project retrieved successfully
-   *       404:
-   *         description: Project not found
-   *       401:
-   *         description: Unauthorized
+   * Get project by ID
    */
   getById = async (req, res) => {
     try {
@@ -174,39 +99,7 @@ class ProjectController {
   };
 
   /**
-   * @swagger
-   * /projects/{id}:
-   *   put:
-   *     summary: Update project
-   *     tags: [Projects]
-   *     security:
-   *       - bearerAuth: []
-   *     parameters:
-   *       - in: path
-   *         name: id
-   *         required: true
-   *         schema:
-   *           type: string
-   *     requestBody:
-   *       content:
-   *         application/json:
-   *           schema:
-   *             type: object
-   *             properties:
-   *               name:
-   *                 type: string
-   *                 minLength: 2
-   *                 maxLength: 100
-   *               description:
-   *                 type: string
-   *                 maxLength: 500
-   *     responses:
-   *       200:
-   *         description: Project updated successfully
-   *       404:
-   *         description: Project not found
-   *       401:
-   *         description: Unauthorized
+   * Update project
    */
   update = async (req, res) => {
     try {
@@ -238,26 +131,7 @@ class ProjectController {
   };
 
   /**
-   * @swagger
-   * /projects/{id}:
-   *   delete:
-   *     summary: Delete project
-   *     tags: [Projects]
-   *     security:
-   *       - bearerAuth: []
-   *     parameters:
-   *       - in: path
-   *         name: id
-   *         required: true
-   *         schema:
-   *           type: string
-   *     responses:
-   *       200:
-   *         description: Project deleted successfully
-   *       404:
-   *         description: Project not found
-   *       401:
-   *         description: Unauthorized
+   * Delete project
    */
   delete = async (req, res) => {
     try {
@@ -290,26 +164,7 @@ class ProjectController {
   };
 
   /**
-   * @swagger
-   * /projects/{id}/stats:
-   *   get:
-   *     summary: Get project statistics
-   *     tags: [Projects]
-   *     security:
-   *       - bearerAuth: []
-   *     parameters:
-   *       - in: path
-   *         name: id
-   *         required: true
-   *         schema:
-   *           type: string
-   *     responses:
-   *       200:
-   *         description: Statistics retrieved successfully
-   *       404:
-   *         description: Project not found
-   *       401:
-   *         description: Unauthorized
+   * Get project statistics
    */
   getStats = async (req, res) => {
     try {

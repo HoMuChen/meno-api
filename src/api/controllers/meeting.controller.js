@@ -9,48 +9,8 @@ class MeetingController {
     this.logger = logger;
   }
 
-  /**
-   * @swagger
-   * /projects/{projectId}/meetings:
-   *   post:
-   *     summary: Create a new meeting with audio upload
-   *     tags: [Meetings]
-   *     security:
-   *       - bearerAuth: []
-   *     parameters:
-   *       - in: path
-   *         name: projectId
-   *         required: true
-   *         schema:
-   *           type: string
-   *     requestBody:
-   *       required: true
-   *       content:
-   *         multipart/form-data:
-   *           schema:
-   *             type: object
-   *             required:
-   *               - title
-   *               - audioFile
-   *             properties:
-   *               title:
-   *                 type: string
-   *                 minLength: 2
-   *                 maxLength: 200
-   *               recordingType:
-   *                 type: string
-   *                 enum: [upload, direct]
-   *                 default: upload
-   *               audioFile:
-   *                 type: string
-   *                 format: binary
-   *     responses:
-   *       201:
-   *         description: Meeting created successfully
-   *       400:
-   *         description: Validation error
-   *       401:
-   *         description: Unauthorized
+    /**
+   * Create 
    */
   create = async (req, res) => {
     try {
@@ -94,42 +54,8 @@ class MeetingController {
     }
   };
 
-  /**
-   * @swagger
-   * /projects/{projectId}/meetings:
-   *   get:
-   *     summary: Get meetings in a project
-   *     tags: [Meetings]
-   *     security:
-   *       - bearerAuth: []
-   *     parameters:
-   *       - in: path
-   *         name: projectId
-   *         required: true
-   *         schema:
-   *           type: string
-   *       - in: query
-   *         name: page
-   *         schema:
-   *           type: integer
-   *           default: 1
-   *       - in: query
-   *         name: limit
-   *         schema:
-   *           type: integer
-   *           default: 10
-   *       - in: query
-   *         name: sort
-   *         schema:
-   *           type: string
-   *           default: -createdAt
-   *     responses:
-   *       200:
-   *         description: Meetings retrieved successfully
-   *       404:
-   *         description: Project not found
-   *       401:
-   *         description: Unauthorized
+    /**
+   * list
    */
   list = async (req, res) => {
     try {
@@ -163,27 +89,8 @@ class MeetingController {
     }
   };
 
-  /**
-   * @swagger
-   * /meetings/{id}:
-   *   get:
-   *     summary: Get meeting by ID
-   *     tags: [Meetings]
-   *     security:
-   *       - bearerAuth: []
-   *     parameters:
-   *       - in: path
-   *         name: id
-   *         required: true
-   *         schema:
-   *           type: string
-   *     responses:
-   *       200:
-   *         description: Meeting retrieved successfully
-   *       404:
-   *         description: Meeting not found
-   *       401:
-   *         description: Unauthorized
+    /**
+   * Get ById
    */
   getById = async (req, res) => {
     try {
@@ -212,37 +119,8 @@ class MeetingController {
     }
   };
 
-  /**
-   * @swagger
-   * /meetings/{id}:
-   *   put:
-   *     summary: Update meeting
-   *     tags: [Meetings]
-   *     security:
-   *       - bearerAuth: []
-   *     parameters:
-   *       - in: path
-   *         name: id
-   *         required: true
-   *         schema:
-   *           type: string
-   *     requestBody:
-   *       content:
-   *         application/json:
-   *           schema:
-   *             type: object
-   *             properties:
-   *               title:
-   *                 type: string
-   *                 minLength: 2
-   *                 maxLength: 200
-   *     responses:
-   *       200:
-   *         description: Meeting updated successfully
-   *       404:
-   *         description: Meeting not found
-   *       401:
-   *         description: Unauthorized
+    /**
+   * Update 
    */
   update = async (req, res) => {
     try {
@@ -273,27 +151,8 @@ class MeetingController {
     }
   };
 
-  /**
-   * @swagger
-   * /meetings/{id}:
-   *   delete:
-   *     summary: Delete meeting
-   *     tags: [Meetings]
-   *     security:
-   *       - bearerAuth: []
-   *     parameters:
-   *       - in: path
-   *         name: id
-   *         required: true
-   *         schema:
-   *           type: string
-   *     responses:
-   *       200:
-   *         description: Meeting deleted successfully
-   *       404:
-   *         description: Meeting not found
-   *       401:
-   *         description: Unauthorized
+    /**
+   * Delete 
    */
   delete = async (req, res) => {
     try {
@@ -322,29 +181,8 @@ class MeetingController {
     }
   };
 
-  /**
-   * @swagger
-   * /meetings/{id}/transcribe:
-   *   post:
-   *     summary: Start transcription for meeting
-   *     tags: [Meetings]
-   *     security:
-   *       - bearerAuth: []
-   *     parameters:
-   *       - in: path
-   *         name: id
-   *         required: true
-   *         schema:
-   *           type: string
-   *     responses:
-   *       202:
-   *         description: Transcription started
-   *       400:
-   *         description: Already transcribed or in progress
-   *       404:
-   *         description: Meeting not found
-   *       401:
-   *         description: Unauthorized
+    /**
+   * Start Transcription
    */
   startTranscription = async (req, res) => {
     try {
@@ -379,27 +217,8 @@ class MeetingController {
     }
   };
 
-  /**
-   * @swagger
-   * /meetings/{id}/status:
-   *   get:
-   *     summary: Get transcription status
-   *     tags: [Meetings]
-   *     security:
-   *       - bearerAuth: []
-   *     parameters:
-   *       - in: path
-   *         name: id
-   *         required: true
-   *         schema:
-   *           type: string
-   *     responses:
-   *       200:
-   *         description: Status retrieved successfully
-   *       404:
-   *         description: Meeting not found
-   *       401:
-   *         description: Unauthorized
+    /**
+   * Get Status
    */
   getStatus = async (req, res) => {
     try {

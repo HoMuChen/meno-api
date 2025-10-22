@@ -10,42 +10,8 @@ class TranscriptionController {
     this.logger = logger;
   }
 
-  /**
-   * @swagger
-   * /meetings/{meetingId}/transcriptions:
-   *   get:
-   *     summary: Get transcriptions for a meeting
-   *     tags: [Transcriptions]
-   *     security:
-   *       - bearerAuth: []
-   *     parameters:
-   *       - in: path
-   *         name: meetingId
-   *         required: true
-   *         schema:
-   *           type: string
-   *       - in: query
-   *         name: page
-   *         schema:
-   *           type: integer
-   *           default: 1
-   *       - in: query
-   *         name: limit
-   *         schema:
-   *           type: integer
-   *           default: 50
-   *       - in: query
-   *         name: sort
-   *         schema:
-   *           type: string
-   *           default: startTime
-   *     responses:
-   *       200:
-   *         description: Transcriptions retrieved successfully
-   *       404:
-   *         description: Meeting not found
-   *       401:
-   *         description: Unauthorized
+    /**
+   * list
    */
   list = async (req, res) => {
     try {
@@ -94,27 +60,8 @@ class TranscriptionController {
     }
   };
 
-  /**
-   * @swagger
-   * /transcriptions/{id}:
-   *   get:
-   *     summary: Get transcription by ID
-   *     tags: [Transcriptions]
-   *     security:
-   *       - bearerAuth: []
-   *     parameters:
-   *       - in: path
-   *         name: id
-   *         required: true
-   *         schema:
-   *           type: string
-   *     responses:
-   *       200:
-   *         description: Transcription retrieved successfully
-   *       404:
-   *         description: Transcription not found
-   *       401:
-   *         description: Unauthorized
+    /**
+   * Get ById
    */
   getById = async (req, res) => {
     try {
@@ -153,39 +100,8 @@ class TranscriptionController {
     }
   };
 
-  /**
-   * @swagger
-   * /transcriptions/{id}:
-   *   put:
-   *     summary: Update transcription segment
-   *     tags: [Transcriptions]
-   *     security:
-   *       - bearerAuth: []
-   *     parameters:
-   *       - in: path
-   *         name: id
-   *         required: true
-   *         schema:
-   *           type: string
-   *     requestBody:
-   *       content:
-   *         application/json:
-   *           schema:
-   *             type: object
-   *             properties:
-   *               speaker:
-   *                 type: string
-   *                 maxLength: 100
-   *               text:
-   *                 type: string
-   *                 maxLength: 5000
-   *     responses:
-   *       200:
-   *         description: Transcription updated successfully
-   *       404:
-   *         description: Transcription not found
-   *       401:
-   *         description: Unauthorized
+    /**
+   * Update 
    */
   update = async (req, res) => {
     try {
@@ -229,42 +145,8 @@ class TranscriptionController {
     }
   };
 
-  /**
-   * @swagger
-   * /meetings/{meetingId}/transcriptions/search:
-   *   get:
-   *     summary: Search transcriptions by text
-   *     tags: [Transcriptions]
-   *     security:
-   *       - bearerAuth: []
-   *     parameters:
-   *       - in: path
-   *         name: meetingId
-   *         required: true
-   *         schema:
-   *           type: string
-   *       - in: query
-   *         name: q
-   *         required: true
-   *         schema:
-   *           type: string
-   *       - in: query
-   *         name: page
-   *         schema:
-   *           type: integer
-   *           default: 1
-   *       - in: query
-   *         name: limit
-   *         schema:
-   *           type: integer
-   *           default: 50
-   *     responses:
-   *       200:
-   *         description: Search results retrieved successfully
-   *       400:
-   *         description: Missing search query
-   *       401:
-   *         description: Unauthorized
+    /**
+   * search
    */
   search = async (req, res) => {
     try {
@@ -319,40 +201,8 @@ class TranscriptionController {
     }
   };
 
-  /**
-   * @swagger
-   * /meetings/{meetingId}/transcriptions/speaker/{speaker}:
-   *   get:
-   *     summary: Get transcriptions by speaker
-   *     tags: [Transcriptions]
-   *     security:
-   *       - bearerAuth: []
-   *     parameters:
-   *       - in: path
-   *         name: meetingId
-   *         required: true
-   *         schema:
-   *           type: string
-   *       - in: path
-   *         name: speaker
-   *         required: true
-   *         schema:
-   *           type: string
-   *       - in: query
-   *         name: page
-   *         schema:
-   *           type: integer
-   *           default: 1
-   *       - in: query
-   *         name: limit
-   *         schema:
-   *           type: integer
-   *           default: 50
-   *     responses:
-   *       200:
-   *         description: Speaker transcriptions retrieved successfully
-   *       401:
-   *         description: Unauthorized
+    /**
+   * Get BySpeaker
    */
   getBySpeaker = async (req, res) => {
     try {
