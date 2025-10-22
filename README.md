@@ -75,10 +75,25 @@ Server will start on `http://localhost:3000`
 
 ## 📚 API Documentation
 
+### Interactive Documentation
+
 Once the server is running, visit:
 
-- **Swagger UI**: http://localhost:3000/api-docs
-- **Health Check**: http://localhost:3000/api/health
+- **Swagger UI**: http://localhost:6001/api-docs
+- **Health Check**: http://localhost:6001/api/health
+
+### OpenAPI Specification
+
+For frontend development or code generation:
+
+- **OpenAPI YAML**: `docs/openapi.yaml` (1600+ lines, 23 endpoints)
+- **Documentation Guide**: See `docs/README.md` for usage instructions
+
+To regenerate the OpenAPI spec after making changes:
+
+```bash
+npm run generate:openapi
+```
 
 ## 🛣️ API Endpoints
 

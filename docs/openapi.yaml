@@ -1,0 +1,1607 @@
+openapi: 3.0.0
+info:
+  title: Meno API
+  version: 1.0.0
+  description: >-
+    RESTful API built with Express, MongoDB, and clean architecture principles. This API provides endpoints for
+    authentication (email/password and Google OAuth), user management, and file storage with support for multiple
+    storage providers (local and Google Cloud Storage).
+  contact:
+    name: API Support
+  license:
+    name: ISC
+    url: https://opensource.org/licenses/ISC
+servers:
+  - url: http://localhost:6001
+    description: Development server
+tags:
+  - name: Health
+    description: Health check and monitoring endpoints
+  - name: Auth
+    description: Authentication endpoints (signup, login, OAuth)
+  - name: Users
+    description: User management endpoints
+  - name: Files
+    description: File storage and management endpoints
+  - name: Projects
+    description: Project management endpoints for organizing meetings
+  - name: Meetings
+    description: Meeting management endpoints with audio upload and transcription
+  - name: Transcriptions
+    description: Transcription management endpoints for viewing and editing meeting transcripts
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT authorization header using the Bearer scheme
+  schemas:
+    Error:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        message:
+          type: string
+          description: Error message describing what went wrong
+          example: An error occurred
+        error:
+          type: object
+          description: Detailed error information
+          properties:
+            code:
+              type: string
+              description: Error code
+              example: VALIDATION_ERROR
+            details:
+              type: object
+              description: Additional error details
+              additionalProperties: true
+    ValidationError:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        message:
+          type: string
+          example: Validation failed
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+                description: Field that failed validation
+                example: email
+              message:
+                type: string
+                description: Validation error message
+                example: Email is required
+    File:
+      type: object
+      required:
+        - filename
+        - path
+        - size
+      properties:
+        _id:
+          type: string
+          description: Auto-generated file ID
+        filename:
+          type: string
+          description: Original filename
+        path:
+          type: string
+          description: Storage path
+        url:
+          type: string
+          description: Accessible URL
+        size:
+          type: number
+          description: File size in bytes
+        mimeType:
+          type: string
+          description: MIME type
+        uploadedBy:
+          type: string
+          description: User ID who uploaded the file
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    Meeting:
+      type: object
+      required:
+        - title
+        - projectId
+        - audioFile
+        - recordingType
+      properties:
+        _id:
+          type: string
+          description: Auto-generated meeting ID
+        title:
+          type: string
+          description: Meeting title
+          minLength: 2
+          maxLength: 200
+        projectId:
+          type: string
+          description: Parent project ID
+        audioFile:
+          type: string
+          description: Audio file path or URL
+        duration:
+          type: number
+          description: Audio duration in seconds
+        recordingType:
+          type: string
+          enum:
+            - upload
+            - direct
+          description: How the meeting was created
+        transcriptionStatus:
+          type: string
+          enum:
+            - pending
+            - processing
+            - completed
+            - failed
+          description: Current transcription status
+        transcriptionProgress:
+          type: number
+          description: Transcription progress (0-100)
+        metadata:
+          type: object
+          properties:
+            fileSize:
+              type: number
+            mimeType:
+              type: string
+            originalName:
+              type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    Project:
+      type: object
+      required:
+        - name
+        - userId
+      properties:
+        _id:
+          type: string
+          description: Auto-generated project ID
+        name:
+          type: string
+          description: Project name
+          minLength: 2
+          maxLength: 100
+        description:
+          type: string
+          description: Project description
+          maxLength: 500
+        userId:
+          type: string
+          description: Owner user ID
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    Transcription:
+      type: object
+      required:
+        - meetingId
+        - startTime
+        - endTime
+        - speaker
+        - text
+      properties:
+        _id:
+          type: string
+          description: Auto-generated transcription ID
+        meetingId:
+          type: string
+          description: Parent meeting ID
+        startTime:
+          type: number
+          description: Start time in milliseconds from audio start
+        endTime:
+          type: number
+          description: End time in milliseconds from audio start
+        speaker:
+          type: string
+          description: Speaker identifier (e.g., "Speaker 1", "John Doe")
+        text:
+          type: string
+          description: Transcribed text segment
+          maxLength: 5000
+        confidence:
+          type: number
+          description: Transcription confidence score (0-1)
+          minimum: 0
+          maximum: 1
+        isEdited:
+          type: boolean
+          description: Whether the transcription was manually edited
+        createdAt:
+          type: string
+          format: date-time
+    User:
+      type: object
+      required:
+        - email
+        - name
+      properties:
+        _id:
+          type: string
+          description: Auto-generated user ID
+        email:
+          type: string
+          format: email
+          description: User email (unique)
+        name:
+          type: string
+          description: User full name
+        password:
+          type: string
+          format: password
+          description: User password (only for email/password auth)
+        provider:
+          type: string
+          enum:
+            - email
+            - google
+          description: Authentication provider
+        googleId:
+          type: string
+          description: Google OAuth ID
+        avatar:
+          type: string
+          description: Avatar file path
+        status:
+          type: string
+          enum:
+            - active
+            - inactive
+            - suspended
+          description: User account status
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+paths:
+  /api/files:
+    post:
+      summary: Upload a file
+      description: Upload a file to the storage provider (max 50MB)
+      tags:
+        - Files
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - file
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: File to upload (max 50MB)
+                uploadedBy:
+                  type: string
+                  description: User ID who is uploading the file
+                  example: 507f1f77bcf86cd799439011
+      responses:
+        '201':
+          description: File uploaded successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/File'
+        '400':
+          description: No file provided or validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '413':
+          description: File too large (max 50MB)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    get:
+      summary: Get all files
+      description: Retrieve a list of all files in the system
+      tags:
+        - Files
+      responses:
+        '200':
+          description: List of files
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/File'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 10
+  /api/files/{id}:
+    get:
+      summary: Get file by ID
+      description: Retrieve file metadata by file ID
+      tags:
+        - Files
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: File ID (MongoDB ObjectId)
+          example: 507f1f77bcf86cd799439011
+      responses:
+        '200':
+          description: File details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/File'
+        '400':
+          description: Invalid file ID format
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: File not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    delete:
+      summary: Delete file
+      description: Delete a file from storage and database
+      tags:
+        - Files
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: File ID (MongoDB ObjectId)
+          example: 507f1f77bcf86cd799439011
+      responses:
+        '200':
+          description: File deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: File deleted successfully
+        '400':
+          description: Invalid file ID format
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: File not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/files/{id}/download:
+    get:
+      summary: Download file
+      description: Download a file by its ID
+      tags:
+        - Files
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: File ID (MongoDB ObjectId)
+          example: 507f1f77bcf86cd799439011
+      responses:
+        '200':
+          description: File download
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '400':
+          description: Invalid file ID format
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: File not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/files/{id}/url:
+    get:
+      summary: Get file URL
+      description: Get the accessible URL for a file
+      tags:
+        - Files
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: File ID (MongoDB ObjectId)
+          example: 507f1f77bcf86cd799439011
+        - in: query
+          name: expiresIn
+          schema:
+            type: integer
+            default: 3600
+      responses:
+        '200':
+          description: File URL
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      url:
+                        type: string
+                        description: Accessible file URL
+                        example: http://localhost:3000/files/1234567890.png
+        '400':
+          description: Invalid file ID format
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: File not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/health:
+    get:
+      summary: Health check endpoint
+      description: Returns the health status of the API server
+      tags:
+        - Health
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Server is healthy
+                  timestamp:
+                    type: string
+                    format: date-time
+                    example: '2024-01-15T10:30:00.000Z'
+                  uptime:
+                    type: number
+                    description: Server uptime in seconds
+                    example: 3600
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/health/ready:
+    get:
+      summary: Readiness check
+      description: Returns the readiness status including database connectivity
+      tags:
+        - Health
+      responses:
+        '200':
+          description: Service is ready
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Server is ready
+                  timestamp:
+                    type: string
+                    format: date-time
+                    example: '2024-01-15T10:30:00.000Z'
+                  database:
+                    type: object
+                    properties:
+                      connected:
+                        type: boolean
+                        example: true
+                      status:
+                        type: string
+                        example: connected
+        '503':
+          description: Server not ready (database connection issues)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: Database not connected
+                  database:
+                    type: object
+                    properties:
+                      connected:
+                        type: boolean
+                        example: false
+                      status:
+                        type: string
+                        example: disconnected
+  /api/projects/{projectId}/meetings:
+    post:
+      summary: Create a new meeting with audio file
+      description: Upload audio file and create a meeting record
+      tags:
+        - Meetings
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: projectId
+          required: true
+          schema:
+            type: string
+          description: Project ID
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - audioFile
+                - title
+              properties:
+                audioFile:
+                  type: string
+                  format: binary
+                  description: Audio file (MP3, WAV, M4A, WebM, OGG - max 100MB)
+                title:
+                  type: string
+                  minLength: 2
+                  maxLength: 200
+                  example: Weekly Team Standup
+                recordingType:
+                  type: string
+                  enum:
+                    - upload
+                    - direct
+                  default: upload
+      responses:
+        '201':
+          description: Meeting created successfully
+        '400':
+          description: Validation error or invalid file
+        '401':
+          description: Unauthorized
+        '404':
+          description: Project not found
+    get:
+      summary: Get meetings in a project
+      description: Retrieve paginated list of meetings for a project
+      tags:
+        - Meetings
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: projectId
+          required: true
+          schema:
+            type: string
+          description: Project ID
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 10
+        - in: query
+          name: sort
+          schema:
+            type: string
+            default: '-createdAt'
+      responses:
+        '200':
+          description: Meetings retrieved successfully
+        '401':
+          description: Unauthorized
+        '404':
+          description: Project not found
+  /api/projects/{projectId}/meetings/{id}:
+    get:
+      summary: Get meeting by ID
+      description: Retrieve specific meeting details
+      tags:
+        - Meetings
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: projectId
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: Meeting ID
+      responses:
+        '200':
+          description: Meeting retrieved successfully
+        '401':
+          description: Unauthorized
+        '404':
+          description: Meeting not found
+    put:
+      summary: Update meeting
+      description: Update meeting title
+      tags:
+        - Meetings
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: projectId
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: Meeting ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                  minLength: 2
+                  maxLength: 200
+      responses:
+        '200':
+          description: Meeting updated successfully
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '404':
+          description: Meeting not found
+    delete:
+      summary: Delete meeting
+      description: Delete meeting, audio file, and all transcriptions
+      tags:
+        - Meetings
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: projectId
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: Meeting ID
+      responses:
+        '200':
+          description: Meeting deleted successfully
+        '401':
+          description: Unauthorized
+        '404':
+          description: Meeting not found
+  /api/projects/{projectId}/meetings/{id}/transcribe:
+    post:
+      summary: Start transcription for meeting
+      description: Begin async transcription process for meeting audio
+      tags:
+        - Meetings
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: projectId
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: Meeting ID
+      responses:
+        '202':
+          description: Transcription started successfully
+        '400':
+          description: Meeting already transcribed or in progress
+        '401':
+          description: Unauthorized
+        '404':
+          description: Meeting not found
+  /api/projects/{projectId}/meetings/{id}/status:
+    get:
+      summary: Get transcription status
+      description: Check transcription progress and status
+      tags:
+        - Meetings
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: projectId
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: Meeting ID
+      responses:
+        '200':
+          description: Status retrieved successfully
+        '401':
+          description: Unauthorized
+        '404':
+          description: Meeting not found
+  /api/projects:
+    post:
+      summary: Create a new project
+      description: Create a new project for organizing meetings
+      tags:
+        - Projects
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+              properties:
+                name:
+                  type: string
+                  minLength: 2
+                  maxLength: 100
+                  example: Q4 Product Planning
+                description:
+                  type: string
+                  maxLength: 500
+                  example: Quarterly planning meetings for product roadmap
+      responses:
+        '201':
+          description: Project created successfully
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+    get:
+      summary: Get user's projects
+      description: Retrieve paginated list of projects for authenticated user
+      tags:
+        - Projects
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+          description: Page number
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 10
+          description: Items per page
+        - in: query
+          name: sort
+          schema:
+            type: string
+            default: '-createdAt'
+          description: Sort field (prefix with - for descending)
+      responses:
+        '200':
+          description: Projects retrieved successfully
+        '401':
+          description: Unauthorized
+  /api/projects/{id}:
+    get:
+      summary: Get project by ID
+      description: Retrieve a specific project by its ID
+      tags:
+        - Projects
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: Project ID
+      responses:
+        '200':
+          description: Project retrieved successfully
+        '401':
+          description: Unauthorized
+        '404':
+          description: Project not found
+    put:
+      summary: Update project
+      description: Update project name or description
+      tags:
+        - Projects
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: Project ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  minLength: 2
+                  maxLength: 100
+                description:
+                  type: string
+                  maxLength: 500
+      responses:
+        '200':
+          description: Project updated successfully
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '404':
+          description: Project not found
+    delete:
+      summary: Delete project
+      description: Delete project and all associated meetings and transcriptions
+      tags:
+        - Projects
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: Project ID
+      responses:
+        '200':
+          description: Project deleted successfully
+        '401':
+          description: Unauthorized
+        '404':
+          description: Project not found
+  /api/projects/{id}/stats:
+    get:
+      summary: Get project statistics
+      description: Retrieve meeting count and other statistics for a project
+      tags:
+        - Projects
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: Project ID
+      responses:
+        '200':
+          description: Statistics retrieved successfully
+        '401':
+          description: Unauthorized
+        '404':
+          description: Project not found
+  /api/meetings/{meetingId}/transcriptions/search:
+    get:
+      summary: Search transcriptions by text
+      description: Search transcription text content with keyword
+      tags:
+        - Transcriptions
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: meetingId
+          required: true
+          schema:
+            type: string
+          description: Meeting ID
+        - in: query
+          name: q
+          required: true
+          schema:
+            type: string
+            maxLength: 200
+          description: Search query keyword
+      responses:
+        '200':
+          description: Search results retrieved successfully
+        '400':
+          description: Invalid search query
+        '401':
+          description: Unauthorized
+        '404':
+          description: Meeting not found
+  /api/meetings/{meetingId}/transcriptions/speaker/{speaker}:
+    get:
+      summary: Get transcriptions by speaker
+      description: Filter transcriptions by speaker name
+      tags:
+        - Transcriptions
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: meetingId
+          required: true
+          schema:
+            type: string
+          description: Meeting ID
+        - in: path
+          name: speaker
+          required: true
+          schema:
+            type: string
+          description: Speaker name
+      responses:
+        '200':
+          description: Speaker transcriptions retrieved successfully
+        '401':
+          description: Unauthorized
+        '404':
+          description: Meeting not found
+  /api/meetings/{meetingId}/transcriptions:
+    get:
+      summary: Get all transcriptions for a meeting
+      description: Retrieve paginated list of transcription segments
+      tags:
+        - Transcriptions
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: meetingId
+          required: true
+          schema:
+            type: string
+          description: Meeting ID
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 50
+            maximum: 100
+        - in: query
+          name: sort
+          schema:
+            type: string
+            default: startTime
+      responses:
+        '200':
+          description: Transcriptions retrieved successfully
+        '400':
+          description: Invalid pagination parameters
+        '401':
+          description: Unauthorized
+        '404':
+          description: Meeting not found
+  /api/meetings/{meetingId}/transcriptions/{id}:
+    get:
+      summary: Get transcription by ID
+      description: Retrieve a specific transcription segment
+      tags:
+        - Transcriptions
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: meetingId
+          required: true
+          schema:
+            type: string
+          description: Meeting ID
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: Transcription ID
+      responses:
+        '200':
+          description: Transcription retrieved successfully
+        '401':
+          description: Unauthorized
+        '404':
+          description: Transcription not found
+    put:
+      summary: Update transcription
+      description: Edit transcription speaker name or text content
+      tags:
+        - Transcriptions
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: meetingId
+          required: true
+          schema:
+            type: string
+          description: Meeting ID
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: Transcription ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                speaker:
+                  type: string
+                  maxLength: 100
+                  example: John Doe
+                text:
+                  type: string
+                  maxLength: 5000
+                  example: We need to prioritize the authentication feature
+      responses:
+        '200':
+          description: Transcription updated successfully
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '404':
+          description: Transcription not found
+  /api/users:
+    get:
+      summary: Get all users
+      description: Retrieve a list of all users in the system
+      tags:
+        - Users
+      responses:
+        '200':
+          description: List of users
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/User'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 10
+    post:
+      summary: Create new user
+      description: Create a new user with email and name
+      tags:
+        - Users
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - name
+              properties:
+                email:
+                  type: string
+                  format: email
+                  description: User's email address (must be unique)
+                  example: john.doe@example.com
+                name:
+                  type: string
+                  minLength: 2
+                  maxLength: 100
+                  description: User's full name
+                  example: John Doe
+                status:
+                  type: string
+                  enum:
+                    - active
+                    - inactive
+                    - suspended
+                  description: User account status
+                  example: active
+      responses:
+        '201':
+          description: User created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/User'
+        '400':
+          description: Validation error or duplicate email
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/users/{id}:
+    get:
+      summary: Get user by ID
+      description: Retrieve a single user by their unique ID
+      tags:
+        - Users
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: User ID (MongoDB ObjectId)
+          example: 507f1f77bcf86cd799439011
+      responses:
+        '200':
+          description: User details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/User'
+        '400':
+          description: Invalid user ID format
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    put:
+      summary: Update user
+      description: Update an existing user's information
+      tags:
+        - Users
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: User ID (MongoDB ObjectId)
+          example: 507f1f77bcf86cd799439011
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                  format: email
+                  description: User's email address
+                  example: john.updated@example.com
+                name:
+                  type: string
+                  minLength: 2
+                  maxLength: 100
+                  description: User's full name
+                  example: John Updated
+                status:
+                  type: string
+                  enum:
+                    - active
+                    - inactive
+                    - suspended
+                  description: User account status
+                  example: active
+      responses:
+        '200':
+          description: User updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/User'
+        '400':
+          description: Validation error or invalid ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    delete:
+      summary: Delete user
+      description: Delete a user from the system
+      tags:
+        - Users
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: User ID (MongoDB ObjectId)
+          example: 507f1f77bcf86cd799439011
+      responses:
+        '200':
+          description: User deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: User deleted successfully
+        '400':
+          description: Invalid user ID format
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/users/{id}/avatar:
+    post:
+      summary: Upload user avatar
+      description: Upload an avatar image for a user (max 5MB)
+      tags:
+        - Users
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: User ID (MongoDB ObjectId)
+          example: 507f1f77bcf86cd799439011
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - avatar
+              properties:
+                avatar:
+                  type: string
+                  format: binary
+                  description: Avatar image file (max 5MB)
+      responses:
+        '200':
+          description: Avatar uploaded
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/User'
+        '400':
+          description: Validation error or file too large
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /auth/signup:
+    post:
+      summary: Register a new user
+      tags:
+        - Auth
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - password
+                - name
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  format: password
+                  minLength: 6
+                name:
+                  type: string
+                  minLength: 2
+      responses:
+        '201':
+          description: User registered successfully
+        '400':
+          description: Validation error
+        '409':
+          description: User already exists
+  /auth/login:
+    post:
+      summary: Login with email and password
+      tags:
+        - Auth
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - password
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  format: password
+      responses:
+        '200':
+          description: Login successful
+        '401':
+          description: Invalid credentials
+  /auth/me:
+    get:
+      summary: Get current user profile
+      tags:
+        - Auth
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: User profile
+        '401':
+          description: Unauthorized
