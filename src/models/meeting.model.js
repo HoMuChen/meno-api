@@ -70,6 +70,12 @@ const meetingSchema = new mongoose.Schema(
       minlength: [2, 'Meeting title must be at least 2 characters'],
       maxlength: [200, 'Meeting title cannot exceed 200 characters']
     },
+    description: {
+      type: String,
+      trim: true,
+      maxlength: [1000, 'Meeting description cannot exceed 1000 characters'],
+      default: null
+    },
     projectId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Project',

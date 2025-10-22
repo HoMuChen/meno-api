@@ -158,6 +158,22 @@ Return ONLY the JSON array, no additional text.`;
 
       clearInterval(stallCheckInterval);
 
+      // Generate title and description
+      this.logger.info('Generating meeting title and description', { meetingId });
+      const summary = await this.generateSummary(meetingId);
+
+      // Update meeting with generated title and description
+      const meetingDoc = await this.meetingService.getMeetingById(meetingId);
+      meetingDoc.title = summary.title;
+      meetingDoc.description = summary.description;
+      await meetingDoc.save();
+
+      this.logger.info('Meeting updated with generated summary', {
+        meetingId,
+        title: summary.title,
+        hasDescription: !!summary.description
+      });
+
       // Finalize
       await this._updateMeetingStatus(meetingId, 'completed', 100);
       await this._updateTranscriptionMetadata(meetingId, {
@@ -349,6 +365,82 @@ Return ONLY the JSON array, no additional text.`;
         error: error.message,
         meetingId
       });
+    }
+  }
+
+  /**
+   * Generate meeting title and description from transcription
+   * @param {string} meetingId - Meeting ID
+   * @returns {Promise<Object>} Generated title and description
+   */
+  async generateSummary(meetingId) {
+    try {
+      this.logger.info('Generating meeting summary', { meetingId });
+
+      // Get all transcription segments
+      const transcriptionData = await this.transcriptionDataService.getTranscriptions(meetingId, {
+        page: 1,
+        limit: 1000,
+        sort: 'startTime'
+      });
+
+      if (!transcriptionData.transcriptions || transcriptionData.transcriptions.length === 0) {
+        throw new Error('No transcriptions found for meeting');
+      }
+
+      // Combine all transcription text
+      const fullTranscript = transcriptionData.transcriptions
+        .map(t => `${t.speaker}: ${t.text}`)
+        .join('\n');
+
+      // Use Gemini to generate title and description
+      const model = this.genAI.getGenerativeModel({ model: this.model });
+
+      const prompt = `Based on this meeting transcript, generate a concise title and description.
+
+Transcript:
+${fullTranscript.substring(0, 10000)} ${fullTranscript.length > 10000 ? '...(truncated)' : ''}
+
+Return ONLY a JSON object with this exact structure:
+{
+  "title": "A short, descriptive title (max 100 characters)",
+  "description": "A brief summary of the key topics and outcomes (max 500 characters)"
+}
+
+Do not include any markdown formatting or code blocks, just the JSON object.`;
+
+      const result = await model.generateContent(prompt);
+      const response = await result.response;
+      const text = response.text();
+
+      // Parse the JSON response
+      let cleanText = text.trim();
+      cleanText = cleanText.replace(/```json\n?/g, '').replace(/```\n?/g, '');
+
+      const summary = JSON.parse(cleanText);
+
+      this.logger.info('Meeting summary generated', {
+        meetingId,
+        title: summary.title,
+        descriptionLength: summary.description?.length || 0
+      });
+
+      return {
+        title: summary.title || 'Untitled Meeting',
+        description: summary.description || ''
+      };
+    } catch (error) {
+      this.logger.error('Error generating meeting summary', {
+        error: error.message,
+        stack: error.stack,
+        meetingId
+      });
+
+      // Return fallback values
+      return {
+        title: 'Meeting',
+        description: ''
+      };
     }
   }
 
