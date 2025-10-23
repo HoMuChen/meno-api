@@ -701,6 +701,78 @@ class MeetingService extends BaseService {
       this.logAndThrow(error, 'Get user recent meetings', { userId, options });
     }
   }
+
+  /**
+   * Generate summary stream for a meeting
+   * @param {string} meetingId - Meeting ID
+   * @param {string} userId - User ID
+   * @returns {AsyncGenerator} Stream of text chunks
+   */
+  async* generateSummaryStream(meetingId, userId) {
+    try {
+      const meeting = await Meeting.findById(meetingId).populate('projectId');
+
+      if (!meeting) {
+        throw new Error('Meeting not found');
+      }
+
+      // Verify ownership
+      if (meeting.projectId.userId.toString() !== userId.toString()) {
+        throw new Error('Access denied');
+      }
+
+      // Check if transcription is completed
+      if (meeting.transcriptionStatus !== 'completed') {
+        throw new Error('Transcription must be completed before generating summary');
+      }
+
+      this.logger.info('Starting summary stream', { meetingId, userId });
+
+      // Stream from transcription service
+      yield* this.transcriptionService.generateSummaryStream(meetingId);
+
+      this.logger.info('Summary stream completed', { meetingId, userId });
+    } catch (error) {
+      this.logAndThrow(error, 'Generate summary stream', { meetingId, userId });
+    }
+  }
+
+  /**
+   * Save generated summary to meeting
+   * @param {string} meetingId - Meeting ID
+   * @param {string} userId - User ID
+   * @param {Object} summary - Summary data with title and description
+   * @returns {Object} Updated meeting
+   */
+  async saveSummary(meetingId, userId, summary) {
+    try {
+      const meeting = await Meeting.findById(meetingId).populate('projectId');
+
+      if (!meeting) {
+        throw new Error('Meeting not found');
+      }
+
+      // Verify ownership
+      if (meeting.projectId.userId.toString() !== userId.toString()) {
+        throw new Error('Access denied');
+      }
+
+      // Update meeting with summary
+      meeting.title = summary.title || meeting.title;
+      meeting.description = summary.description || meeting.description;
+      await meeting.save();
+
+      this.logSuccess('Summary saved to meeting', {
+        meetingId,
+        userId,
+        title: summary.title
+      });
+
+      return meeting.toSafeObject();
+    } catch (error) {
+      this.logAndThrow(error, 'Save summary', { meetingId, userId, summary });
+    }
+  }
 }
 
 module.exports = MeetingService;

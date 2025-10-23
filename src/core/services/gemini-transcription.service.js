@@ -450,6 +450,70 @@ Do not include any markdown formatting or code blocks, just the JSON object.`;
   }
 
   /**
+   * Generate meeting title and description with streaming
+   * @param {string} meetingId - Meeting ID
+   * @returns {AsyncGenerator} Async generator yielding text chunks
+   */
+  async* generateSummaryStream(meetingId) {
+    try {
+      this.logger.info('Generating meeting summary with streaming', { meetingId });
+
+      // Get all transcription segments
+      const transcriptionData = await this.transcriptionDataService.getTranscriptions(meetingId, {
+        page: 1,
+        limit: 1000,
+        sort: 'startTime'
+      });
+
+      if (!transcriptionData.transcriptions || transcriptionData.transcriptions.length === 0) {
+        throw new Error('No transcriptions found for meeting');
+      }
+
+      // Combine all transcription text
+      const fullTranscript = transcriptionData.transcriptions
+        .map(t => `${t.speaker}: ${t.text}`)
+        .join('\n');
+
+      // Use Gemini to generate title and description with streaming
+      const model = this.genAI.getGenerativeModel({ model: this.model });
+
+      const prompt = `Based on this meeting transcript, generate a concise title and description.
+
+IMPORTANT: Generate the title and description in the SAME LANGUAGE as the transcript text. If the transcript is in Chinese, respond in Chinese. If it's in English, respond in English, etc.
+
+Transcript:
+${fullTranscript.substring(0, 10000)} ${fullTranscript.length > 10000 ? '...(truncated)' : ''}
+
+Return ONLY a JSON object with this exact structure:
+{
+  "title": "A short, descriptive title (max 100 characters) - MUST be in the same language as the transcript",
+  "description": "A brief summary of the key topics and outcomes (max 500 characters) - MUST be in the same language as the transcript"
+}
+
+Do not include any markdown formatting or code blocks, just the JSON object.`;
+
+      const result = await model.generateContentStream(prompt);
+
+      // Stream chunks as they arrive
+      for await (const chunk of result.stream) {
+        const chunkText = chunk.text();
+        if (chunkText) {
+          yield chunkText;
+        }
+      }
+
+      this.logger.info('Meeting summary streaming completed', { meetingId });
+    } catch (error) {
+      this.logger.error('Error generating meeting summary stream', {
+        error: error.message,
+        stack: error.stack,
+        meetingId
+      });
+      throw error;
+    }
+  }
+
+  /**
    * Estimate transcription time based on audio duration
    * @param {number} audioDuration - Audio duration in seconds
    * @returns {number} Estimated time in seconds

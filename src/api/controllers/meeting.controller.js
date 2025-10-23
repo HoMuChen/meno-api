@@ -127,6 +127,63 @@ class MeetingController extends BaseController {
 
     return this.sendSuccess(res, result, 'User meetings retrieved successfully');
   });
+
+  /**
+   * Generate summary stream for a meeting
+   * Streams AI-generated summary and saves to database when complete
+   */
+  generateSummaryStream = this.asyncHandler(async (req, res) => {
+    const userId = this.getUserId(req);
+    const { id: meetingId } = req.params;
+
+    try {
+      // Set headers for Server-Sent Events
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Connection', 'keep-alive');
+      res.setHeader('X-Accel-Buffering', 'no'); // Disable nginx buffering
+
+      // Send initial connection event
+      res.write(`data: ${JSON.stringify({ type: 'connected', meetingId })}\n\n`);
+
+      // Accumulate full response text
+      let fullText = '';
+
+      // Stream from service
+      const stream = this.meetingService.generateSummaryStream(meetingId, userId);
+
+      for await (const chunk of stream) {
+        fullText += chunk;
+        // Send chunk event
+        res.write(`data: ${JSON.stringify({ type: 'chunk', content: chunk })}\n\n`);
+      }
+
+      // Parse the complete JSON response
+      let cleanText = fullText.trim();
+      cleanText = cleanText.replace(/```json\n?/g, '').replace(/```\n?/g, '');
+      const summary = JSON.parse(cleanText);
+
+      // Save summary to database
+      const updatedMeeting = await this.meetingService.saveSummary(meetingId, userId, summary);
+
+      // Send completion event
+      res.write(`data: ${JSON.stringify({
+        type: 'complete',
+        summary,
+        meeting: updatedMeeting
+      })}\n\n`);
+
+      // Close connection
+      res.end();
+    } catch (error) {
+      // Send error event
+      res.write(`data: ${JSON.stringify({
+        type: 'error',
+        message: error.message
+      })}\n\n`);
+      res.end();
+    }
+  });
 }
 
 module.exports = MeetingController;

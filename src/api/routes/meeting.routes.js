@@ -331,6 +331,50 @@ const createMeetingRoutes = (meetingController) => {
    */
   router.get('/:id/status', meetingController.getStatus);
 
+  /**
+   * @swagger
+   * /api/projects/{projectId}/meetings/{id}/summary/stream:
+   *   post:
+   *     summary: Generate meeting summary with streaming
+   *     description: Stream AI-generated meeting title and description in real-time, saves to database when complete
+   *     tags: [Meetings]
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: projectId
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: Project ID
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: Meeting ID
+   *     responses:
+   *       200:
+   *         description: Streaming response with Server-Sent Events
+   *         content:
+   *           text/event-stream:
+   *             schema:
+   *               type: string
+   *               description: |
+   *                 SSE stream with JSON events:
+   *                 - {"type":"connected","meetingId":"..."}
+   *                 - {"type":"chunk","content":"partial text"}
+   *                 - {"type":"complete","summary":{...},"meeting":{...}}
+   *                 - {"type":"error","message":"..."}
+   *       400:
+   *         description: Transcription not completed
+   *       401:
+   *         description: Unauthorized
+   *       404:
+   *         description: Meeting not found
+   */
+  router.post('/:id/summary/stream', meetingController.generateSummaryStream);
+
   return router;
 };
 
