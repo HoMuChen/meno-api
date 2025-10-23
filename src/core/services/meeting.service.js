@@ -41,20 +41,31 @@ class MeetingService extends BaseService {
       const basename = path.basename(audioFile.originalname, ext);
       const storagePath = `meetings/${projectId}/${timestamp}-${basename}${ext}`;
 
-      // Extract audio duration before upload
+      // Get audio duration from request body or extract from file
       let audioDuration = null;
-      try {
-        audioDuration = await getAudioDuration(audioFile.path);
-        this.logger.info('Audio duration extracted', {
+
+      // If duration is provided in request body, use it directly
+      if (meetingData.duration !== undefined && meetingData.duration !== null) {
+        audioDuration = parseFloat(meetingData.duration);
+        this.logger.info('Using provided audio duration', {
           duration: audioDuration,
           audioFile: audioFile.originalname
         });
-      } catch (error) {
-        this.logger.warn('Failed to extract audio duration', {
-          error: error.message,
-          audioFile: audioFile.originalname
-        });
-        // Continue without duration - it will default to null
+      } else {
+        // Otherwise, extract duration from audio file
+        try {
+          audioDuration = await getAudioDuration(audioFile.path);
+          this.logger.info('Audio duration extracted from file', {
+            duration: audioDuration,
+            audioFile: audioFile.originalname
+          });
+        } catch (error) {
+          this.logger.warn('Failed to extract audio duration', {
+            error: error.message,
+            audioFile: audioFile.originalname
+          });
+          // Continue without duration - it will default to null
+        }
       }
 
       // Upload file to storage provider

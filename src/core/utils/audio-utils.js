@@ -36,6 +36,12 @@ async function getAudioDuration(filePath) {
 
       // Return duration rounded to 2 decimal places
       const duration = parseFloat(metadata.format.duration);
+
+      // Handle invalid duration (NaN from browser-recorded audio)
+      if (isNaN(duration)) {
+        return resolve(null);
+      }
+
       resolve(Math.round(duration * 100) / 100);
     });
   });

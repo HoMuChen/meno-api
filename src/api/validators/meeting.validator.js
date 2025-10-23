@@ -40,6 +40,13 @@ const createMeetingSchema = Joi.object({
     .default('upload')
     .messages({
       'any.only': 'Recording type must be either "upload" or "direct"'
+    }),
+  duration: Joi.number()
+    .positive()
+    .optional()
+    .messages({
+      'number.base': 'Duration must be a number',
+      'number.positive': 'Duration must be a positive number'
     })
 });
 

@@ -689,6 +689,11 @@ paths:
                     - upload
                     - direct
                   default: upload
+                duration:
+                  type: number
+                  format: float
+                  description: Audio duration in seconds (optional, calculated from file if not provided)
+                  example: 125.5
       responses:
         '201':
           description: Meeting created successfully
@@ -851,6 +856,46 @@ paths:
           description: Transcription started successfully
         '400':
           description: Meeting already transcribed or in progress
+        '401':
+          description: Unauthorized
+        '404':
+          description: Meeting not found
+  /api/projects/{projectId}/meetings/{id}/download:
+    get:
+      summary: Download meeting audio file
+      description: Download the original audio file for a meeting
+      tags:
+        - Meetings
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: projectId
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: Meeting ID
+      responses:
+        '200':
+          description: Audio file downloaded successfully
+          content:
+            audio/mpeg:
+              schema:
+                type: string
+                format: binary
+            audio/wav:
+              schema:
+                type: string
+                format: binary
+            audio/mp4:
+              schema:
+                type: string
+                format: binary
         '401':
           description: Unauthorized
         '404':
@@ -1048,6 +1093,61 @@ paths:
           description: Unauthorized
         '404':
           description: Project not found
+  /api/meetings/{meetingId}/transcriptions/status:
+    get:
+      summary: Get transcription status
+      description: Get real-time transcription progress for polling
+      tags:
+        - Transcriptions
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: meetingId
+          required: true
+          schema:
+            type: string
+          description: Meeting ID
+      responses:
+        '200':
+          description: Status retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      status:
+                        type: string
+                        enum:
+                          - pending
+                          - processing
+                          - completed
+                          - failed
+                      progress:
+                        type: number
+                        minimum: 0
+                        maximum: 100
+                      processedSegments:
+                        type: number
+                      estimatedTotal:
+                        type: number
+                      elapsedTime:
+                        type: number
+                        description: Elapsed time in milliseconds
+                      estimatedRemaining:
+                        type: number
+                        description: Estimated remaining time in milliseconds
+                      errorMessage:
+                        type: string
+        '401':
+          description: Unauthorized
+        '404':
+          description: Meeting not found
   /api/meetings/{meetingId}/transcriptions/search:
     get:
       summary: Search transcriptions by text
@@ -1548,88 +1648,29 @@ paths:
           required: true
           schema:
             type: string
-          description: User ID (MongoDB ObjectId)
-          example: 507f1f77bcf86cd799439011
+          description: User ID
         - in: query
           name: page
           schema:
             type: integer
             default: 1
-          description: Page number for pagination
         - in: query
           name: limit
           schema:
             type: integer
             default: 5
-          description: Number of meetings per page
         - in: query
           name: sort
           schema:
             type: string
-            default: "-createdAt"
-          description: Sort field (prefix with - for descending)
-          example: "-createdAt"
+            default: '-createdAt'
       responses:
         '200':
           description: User meetings retrieved successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                    example: true
-                  message:
-                    type: string
-                    example: User meetings retrieved successfully
-                  data:
-                    type: object
-                    properties:
-                      meetings:
-                        type: array
-                        items:
-                          allOf:
-                            - $ref: '#/components/schemas/Meeting'
-                            - type: object
-                              properties:
-                                projectName:
-                                  type: string
-                                  description: Name of the project the meeting belongs to
-                                  example: Q4 Product Planning
-                      pagination:
-                        type: object
-                        properties:
-                          page:
-                            type: integer
-                            example: 1
-                          limit:
-                            type: integer
-                            example: 5
-                          total:
-                            type: integer
-                            example: 42
-                          pages:
-                            type: integer
-                            example: 9
         '401':
-          description: Unauthorized - authentication required
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
+          description: Unauthorized
         '404':
           description: User not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '500':
-          description: Server error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
   /auth/signup:
     post:
       summary: Register a new user

@@ -59,6 +59,11 @@ const createMeetingRoutes = (meetingController) => {
    *                 type: string
    *                 enum: [upload, direct]
    *                 default: upload
+   *               duration:
+   *                 type: number
+   *                 format: float
+   *                 description: Audio duration in seconds (optional, calculated from file if not provided)
+   *                 example: 125.5
    *     responses:
    *       201:
    *         description: Meeting created successfully
