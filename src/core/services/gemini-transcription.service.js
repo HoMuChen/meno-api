@@ -477,14 +477,22 @@ Do not include any markdown formatting or code blocks, just the JSON object.`;
       // Use Gemini to generate summary with streaming
       const model = this.genAI.getGenerativeModel({ model: this.model });
 
-      const prompt = `Based on this meeting transcript, generate a comprehensive summary in markdown format.
+      const prompt = `**CRITICAL REQUIREMENT: You MUST generate the entire summary in the EXACT SAME LANGUAGE as the transcript below.**
 
-IMPORTANT: Generate the summary in the SAME LANGUAGE as the transcript text. If the transcript is in Chinese, respond in Chinese. If it's in English, respond in English, etc.
+For example:
+- If the transcript is in Chinese (中文), write the ENTIRE summary in Chinese (中文)
+- If the transcript is in English, write the ENTIRE summary in English
+- If the transcript is in Spanish, write the ENTIRE summary in Spanish
+- And so on for any other language
+
+**DO NOT translate the transcript language. Use the SAME language for ALL sections.**
 
 Transcript:
 ${fullTranscript.substring(0, 10000)} ${fullTranscript.length > 10000 ? '...(truncated)' : ''}
 
-Generate a structured summary with the following sections:
+Based on this meeting transcript, generate a comprehensive summary in markdown format using the SAME LANGUAGE as the transcript above.
+
+Generate a structured summary with the following sections (section headers in same language as transcript):
 
 ## Overview
 A brief 2-3 sentence overview of what was discussed in the meeting.
@@ -501,6 +509,8 @@ Summarize the final outcomes and what was agreed upon.
 - List specific tasks that need to be done
 - Include who is responsible (if mentioned)
 - Note any deadlines or priorities (if mentioned)
+
+**REMINDER: Write the ENTIRE summary (including all section content) in the SAME LANGUAGE as the transcript above.**
 
 Return ONLY the markdown text with these sections. Do not include any code blocks or JSON formatting.`;
 

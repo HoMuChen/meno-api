@@ -162,14 +162,10 @@ class MeetingController extends BaseController {
       summary = summary.trim().replace(/```markdown\n?/g, '').replace(/```\n?/g, '');
 
       // Save summary to database
-      const updatedMeeting = await this.meetingService.saveSummary(meetingId, userId, summary);
+      await this.meetingService.saveSummary(meetingId, userId, summary);
 
       // Send completion event
-      res.write(`data: ${JSON.stringify({
-        type: 'complete',
-        summary,
-        meeting: updatedMeeting
-      })}\n\n`);
+      res.write(`data: ${JSON.stringify({ type: 'complete' })}\n\n`);
 
       // Close connection
       res.end();
