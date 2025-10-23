@@ -24,6 +24,13 @@ const mongoose = require('mongoose');
  *           description: Meeting title
  *           minLength: 2
  *           maxLength: 200
+ *         description:
+ *           type: string
+ *           description: Meeting description
+ *           maxLength: 1000
+ *         summary:
+ *           type: string
+ *           description: AI-generated meeting summary with Overview, Key Points, Conclusion, and Action Items
  *         projectId:
  *           type: string
  *           description: Parent project ID
@@ -74,6 +81,11 @@ const meetingSchema = new mongoose.Schema(
       type: String,
       trim: true,
       maxlength: [1000, 'Meeting description cannot exceed 1000 characters'],
+      default: null
+    },
+    summary: {
+      type: String,
+      trim: true,
       default: null
     },
     projectId: {

@@ -336,7 +336,10 @@ const createMeetingRoutes = (meetingController) => {
    * /api/projects/{projectId}/meetings/{id}/summary/stream:
    *   post:
    *     summary: Generate meeting summary with streaming
-   *     description: Stream AI-generated meeting title and description in real-time, saves to database when complete
+   *     description: |
+   *       Stream AI-generated meeting summary in markdown format with real-time updates.
+   *       Summary includes Overview, Key Points, Conclusion, and Action Items sections.
+   *       Saves to database when complete.
    *     tags: [Meetings]
    *     security:
    *       - bearerAuth: []
@@ -363,9 +366,22 @@ const createMeetingRoutes = (meetingController) => {
    *               description: |
    *                 SSE stream with JSON events:
    *                 - {"type":"connected","meetingId":"..."}
-   *                 - {"type":"chunk","content":"partial text"}
-   *                 - {"type":"complete","summary":{...},"meeting":{...}}
+   *                 - {"type":"chunk","content":"markdown text"}
+   *                 - {"type":"complete","summary":"full markdown summary","meeting":{...}}
    *                 - {"type":"error","message":"..."}
+   *
+   *                 Summary format includes:
+   *                 ## Overview
+   *                 Brief overview of meeting discussion
+   *
+   *                 ## Key Points
+   *                 - Main topics and decisions
+   *
+   *                 ## Conclusion
+   *                 Final outcomes and agreements
+   *
+   *                 ## Action Items
+   *                 - Tasks with responsibilities
    *       400:
    *         description: Transcription not completed
    *       401:

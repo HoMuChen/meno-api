@@ -474,23 +474,35 @@ Do not include any markdown formatting or code blocks, just the JSON object.`;
         .map(t => `${t.speaker}: ${t.text}`)
         .join('\n');
 
-      // Use Gemini to generate title and description with streaming
+      // Use Gemini to generate summary with streaming
       const model = this.genAI.getGenerativeModel({ model: this.model });
 
-      const prompt = `Based on this meeting transcript, generate a concise title and description.
+      const prompt = `Based on this meeting transcript, generate a comprehensive summary in markdown format.
 
-IMPORTANT: Generate the title and description in the SAME LANGUAGE as the transcript text. If the transcript is in Chinese, respond in Chinese. If it's in English, respond in English, etc.
+IMPORTANT: Generate the summary in the SAME LANGUAGE as the transcript text. If the transcript is in Chinese, respond in Chinese. If it's in English, respond in English, etc.
 
 Transcript:
 ${fullTranscript.substring(0, 10000)} ${fullTranscript.length > 10000 ? '...(truncated)' : ''}
 
-Return ONLY a JSON object with this exact structure:
-{
-  "title": "A short, descriptive title (max 100 characters) - MUST be in the same language as the transcript",
-  "description": "A brief summary of the key topics and outcomes (max 500 characters) - MUST be in the same language as the transcript"
-}
+Generate a structured summary with the following sections:
 
-Do not include any markdown formatting or code blocks, just the JSON object.`;
+## Overview
+A brief 2-3 sentence overview of what was discussed in the meeting.
+
+## Key Points
+- List the main topics and decisions made
+- Include important discussion points
+- Highlight any agreements or consensus reached
+
+## Conclusion
+Summarize the final outcomes and what was agreed upon.
+
+## Action Items
+- List specific tasks that need to be done
+- Include who is responsible (if mentioned)
+- Note any deadlines or priorities (if mentioned)
+
+Return ONLY the markdown text with these sections. Do not include any code blocks or JSON formatting.`;
 
       const result = await model.generateContentStream(prompt);
 

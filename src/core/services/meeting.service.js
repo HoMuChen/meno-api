@@ -741,7 +741,7 @@ class MeetingService extends BaseService {
    * Save generated summary to meeting
    * @param {string} meetingId - Meeting ID
    * @param {string} userId - User ID
-   * @param {Object} summary - Summary data with title and description
+   * @param {string} summary - Summary markdown text
    * @returns {Object} Updated meeting
    */
   async saveSummary(meetingId, userId, summary) {
@@ -758,19 +758,18 @@ class MeetingService extends BaseService {
       }
 
       // Update meeting with summary
-      meeting.title = summary.title || meeting.title;
-      meeting.description = summary.description || meeting.description;
+      meeting.summary = summary;
       await meeting.save();
 
       this.logSuccess('Summary saved to meeting', {
         meetingId,
         userId,
-        title: summary.title
+        summaryLength: summary?.length || 0
       });
 
       return meeting.toSafeObject();
     } catch (error) {
-      this.logAndThrow(error, 'Save summary', { meetingId, userId, summary });
+      this.logAndThrow(error, 'Save summary', { meetingId, userId });
     }
   }
 }

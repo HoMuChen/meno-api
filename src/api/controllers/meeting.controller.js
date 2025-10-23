@@ -130,7 +130,7 @@ class MeetingController extends BaseController {
 
   /**
    * Generate summary stream for a meeting
-   * Streams AI-generated summary and saves to database when complete
+   * Streams AI-generated markdown summary and saves to database when complete
    */
   generateSummaryStream = this.asyncHandler(async (req, res) => {
     const userId = this.getUserId(req);
@@ -146,22 +146,20 @@ class MeetingController extends BaseController {
       // Send initial connection event
       res.write(`data: ${JSON.stringify({ type: 'connected', meetingId })}\n\n`);
 
-      // Accumulate full response text
-      let fullText = '';
+      // Accumulate full summary text
+      let summary = '';
 
       // Stream from service
       const stream = this.meetingService.generateSummaryStream(meetingId, userId);
 
       for await (const chunk of stream) {
-        fullText += chunk;
+        summary += chunk;
         // Send chunk event
         res.write(`data: ${JSON.stringify({ type: 'chunk', content: chunk })}\n\n`);
       }
 
-      // Parse the complete JSON response
-      let cleanText = fullText.trim();
-      cleanText = cleanText.replace(/```json\n?/g, '').replace(/```\n?/g, '');
-      const summary = JSON.parse(cleanText);
+      // Clean up any markdown code blocks that might be present
+      summary = summary.trim().replace(/```markdown\n?/g, '').replace(/```\n?/g, '');
 
       // Save summary to database
       const updatedMeeting = await this.meetingService.saveSummary(meetingId, userId, summary);
