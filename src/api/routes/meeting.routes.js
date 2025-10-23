@@ -337,11 +337,13 @@ const createMeetingRoutes = (meetingController) => {
    *   post:
    *     summary: Generate meeting summary with streaming
    *     description: |
-   *       Stream AI-generated meeting summary in markdown format with real-time updates.
+   *       Stream AI-generated meeting summary with real-time updates.
    *       Summary includes Overview, Key Points, Conclusion, and Action Items sections.
    *
-   *       IMPORTANT: Summary is generated in the SAME LANGUAGE as the meeting transcription.
-   *       For example, if transcription is in Chinese, the summary will be in Chinese.
+   *       IMPORTANT REQUIREMENTS:
+   *       - Summary is in MARKDOWN FORMAT with proper headings (##) and bullet points (-)
+   *       - Summary is generated in the SAME LANGUAGE as the meeting transcription
+   *       - For example, if transcription is in Chinese, the summary will be in Chinese
    *
    *       Saves to database when complete.
    *     tags: [Meetings]
@@ -374,7 +376,8 @@ const createMeetingRoutes = (meetingController) => {
    *                 - {"type":"complete"}
    *                 - {"type":"error","message":"..."}
    *
-   *                 Summary format includes:
+   *                 Summary is in MARKDOWN FORMAT with the following sections:
+   *
    *                 ## Overview
    *                 Brief overview of meeting discussion
    *
@@ -387,7 +390,9 @@ const createMeetingRoutes = (meetingController) => {
    *                 ## Action Items
    *                 - Tasks with responsibilities
    *
-   *                 Note: Summary is generated in the same language as the transcription.
+   *                 Notes:
+   *                 - All content is in MARKDOWN FORMAT (## for headings, - for bullet points)
+   *                 - Summary is generated in the same language as the transcription
    *       400:
    *         description: Transcription not completed
    *       401:
