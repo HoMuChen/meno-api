@@ -1708,6 +1708,77 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+  /api/users/me/usage:
+    get:
+      summary: Get current user's monthly usage statistics
+      description: Retrieve usage statistics (total meeting duration) for the authenticated user for a specific month
+      tags:
+        - Users
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: year
+          schema:
+            type: integer
+          description: Year (defaults to current year)
+          example: 2025
+        - in: query
+          name: month
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 12
+          description: Month (1-12, defaults to current month)
+          example: 1
+      responses:
+        '200':
+          description: Usage statistics retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      userId:
+                        type: string
+                        example: 507f1f77bcf86cd799439011
+                      year:
+                        type: integer
+                        example: 2025
+                      month:
+                        type: integer
+                        example: 1
+                      totalDurationSeconds:
+                        type: number
+                        example: 3600
+                      totalDurationMinutes:
+                        type: number
+                        example: 60
+                      totalDurationHours:
+                        type: string
+                        example: '1.00'
+                      meetingCount:
+                        type: integer
+                        example: 5
+                      period:
+                        type: object
+                        properties:
+                          start:
+                            type: string
+                            format: date-time
+                          end:
+                            type: string
+                            format: date-time
+        '400':
+          description: Invalid query parameters
+        '401':
+          description: Unauthorized
   /api/users/{userId}/meetings:
     get:
       summary: Get user's recent meetings

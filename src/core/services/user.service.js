@@ -4,6 +4,9 @@
  */
 const BaseService = require('./base.service');
 const User = require('../../models/user.model');
+const Meeting = require('../../models/meeting.model');
+const Project = require('../../models/project.model');
+const mongoose = require('mongoose');
 const { NotFoundError, ConflictError } = require('../../utils/errors');
 
 class UserService extends BaseService {
@@ -163,6 +166,100 @@ class UserService extends BaseService {
       return user;
     } catch (error) {
       this.logAndThrow(error, 'Upload avatar', { userId });
+    }
+  }
+
+  /**
+   * Get monthly usage statistics for a user
+   * Calculates total meeting duration for specified month
+   * @param {string} userId - User ID
+   * @param {number} year - Year (defaults to current year)
+   * @param {number} month - Month (1-12, defaults to current month)
+   * @returns {Object} Usage statistics
+   */
+  async getMonthlyUsage(userId, year = null, month = null) {
+    try {
+      // Verify user exists
+      const user = await User.findById(userId);
+      if (!user) {
+        throw new NotFoundError(`User not found with ID: ${userId}`);
+      }
+
+      // Use current year/month if not provided
+      const now = new Date();
+      const targetYear = year || now.getFullYear();
+      const targetMonth = month || now.getMonth() + 1; // JavaScript months are 0-indexed
+
+      // Calculate start and end of month
+      const startOfMonth = new Date(targetYear, targetMonth - 1, 1);
+      const endOfMonth = new Date(targetYear, targetMonth, 1);
+
+      this.logger.debug('Calculating monthly usage', {
+        userId,
+        year: targetYear,
+        month: targetMonth,
+        startOfMonth,
+        endOfMonth
+      });
+
+      // Aggregate meetings by userId and date range
+      const result = await Meeting.aggregate([
+        // Step 1: Lookup project for each meeting
+        {
+          $lookup: {
+            from: 'projects',
+            localField: 'projectId',
+            foreignField: '_id',
+            as: 'project'
+          }
+        },
+        // Step 2: Unwind project array
+        { $unwind: '$project' },
+        // Step 3: Filter by userId and date range
+        {
+          $match: {
+            'project.userId': new mongoose.Types.ObjectId(userId),
+            createdAt: {
+              $gte: startOfMonth,
+              $lt: endOfMonth
+            }
+          }
+        },
+        // Step 4: Group and sum duration
+        {
+          $group: {
+            _id: null,
+            totalDuration: { $sum: { $ifNull: ['$duration', 0] } },
+            meetingCount: { $sum: 1 }
+          }
+        }
+      ]);
+
+      const usageData = result[0] || { totalDuration: 0, meetingCount: 0 };
+
+      this.logSuccess('Monthly usage calculated', {
+        userId,
+        year: targetYear,
+        month: targetMonth,
+        totalDuration: usageData.totalDuration,
+        meetingCount: usageData.meetingCount
+      });
+
+      return {
+        userId,
+        year: targetYear,
+        month: targetMonth,
+        totalDurationSeconds: usageData.totalDuration,
+        totalDurationMinutes: Math.round(usageData.totalDuration / 60),
+        totalDurationHours: (usageData.totalDuration / 3600).toFixed(2),
+        meetingCount: usageData.meetingCount,
+        period: {
+          start: startOfMonth,
+          end: endOfMonth
+        }
+      };
+    } catch (error) {
+      this.logAndThrow(error, 'Get monthly usage', { userId, year, month });
     }
   }
 }
