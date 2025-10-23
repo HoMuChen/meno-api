@@ -401,13 +401,15 @@ Return ONLY the JSON array, no additional text.`;
 
       const prompt = `Based on this meeting transcript, generate a concise title and description.
 
+IMPORTANT: Generate the title and description in the SAME LANGUAGE as the transcript text. If the transcript is in Chinese, respond in Chinese. If it's in English, respond in English, etc.
+
 Transcript:
 ${fullTranscript.substring(0, 10000)} ${fullTranscript.length > 10000 ? '...(truncated)' : ''}
 
 Return ONLY a JSON object with this exact structure:
 {
-  "title": "A short, descriptive title (max 100 characters)",
-  "description": "A brief summary of the key topics and outcomes (max 500 characters)"
+  "title": "A short, descriptive title (max 100 characters) - MUST be in the same language as the transcript",
+  "description": "A brief summary of the key topics and outcomes (max 500 characters) - MUST be in the same language as the transcript"
 }
 
 Do not include any markdown formatting or code blocks, just the JSON object.`;
