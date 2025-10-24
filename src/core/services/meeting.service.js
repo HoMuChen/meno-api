@@ -4,6 +4,7 @@
  */
 const Meeting = require('../../models/meeting.model');
 const Project = require('../../models/project.model');
+const User = require('../../models/user.model');
 const mongoose = require('mongoose');
 const path = require('path');
 const BaseService = require('./base.service');
@@ -106,6 +107,30 @@ class MeetingService extends BaseService {
         userId,
         audioFileUri: uploadResult.uri
       });
+
+      // Increment user's usage counter (if duration available)
+      if (audioDuration && audioDuration > 0) {
+        try {
+          const user = await User.findById(userId);
+          if (user) {
+            user.addUsage(audioDuration);
+            await user.save();
+
+            this.logger.info('User usage incremented', {
+              userId,
+              duration: audioDuration,
+              newTotal: user.currentMonthUsage.duration
+            });
+          }
+        } catch (usageError) {
+          // Log but don't fail the meeting creation
+          this.logger.warn('Failed to increment usage', {
+            error: usageError.message,
+            userId,
+            meetingId: meeting._id
+          });
+        }
+      }
 
       // Auto-start transcription if configured
       if (process.env.AUTO_START_TRANSCRIPTION === 'true') {
