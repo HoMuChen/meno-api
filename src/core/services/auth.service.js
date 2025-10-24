@@ -4,6 +4,8 @@
  */
 const jwt = require('jsonwebtoken');
 const User = require('../../models/user.model');
+const TierConfig = require('../../models/tierConfig.model');
+const Project = require('../../models/project.model');
 const BaseService = require('./base.service');
 
 class AuthService extends BaseService {
@@ -36,6 +38,41 @@ class AuthService extends BaseService {
   }
 
   /**
+   * Create default project for new user
+   * @param {string} userId - User ID
+   * @returns {Object} Created project
+   */
+  async createDefaultProject(userId) {
+    try {
+      this.logger.debug('Creating default project for new user', { userId });
+
+      const defaultProject = new Project({
+        name: 'Default',
+        description: 'Your default project',
+        userId
+      });
+
+      await defaultProject.save();
+
+      this.logger.info('Default project created', {
+        userId,
+        projectId: defaultProject._id,
+        projectName: defaultProject.name
+      });
+
+      return defaultProject;
+    } catch (error) {
+      this.logger.error('Failed to create default project', {
+        error: error.message,
+        stack: error.stack,
+        userId
+      });
+      // Don't throw - we don't want to fail user registration if project creation fails
+      // The user can create projects manually later
+    }
+  }
+
+  /**
    * Register new user with email and password
    * @param {Object} userData - User registration data
    * @returns {Object} Created user and token
@@ -50,17 +87,31 @@ class AuthService extends BaseService {
         throw new Error('User with this email already exists');
       }
 
+      // Get default (free) tier
+      const defaultTier = await TierConfig.getDefaultTier();
+      if (!defaultTier) {
+        throw new Error('Default tier not found. Please run tier seeder.');
+      }
+
       // Create new user
       const user = new User({
         email,
         password,
         name,
-        provider: 'email'
+        provider: 'email',
+        tier: defaultTier._id
       });
 
       await user.save();
 
-      this.logSuccess('User registered successfully', { userId: user._id, email: user.email });
+      this.logSuccess('User registered successfully', {
+        userId: user._id,
+        email: user.email,
+        tier: defaultTier.name
+      });
+
+      // Create default project for new user
+      await this.createDefaultProject(user._id);
 
       // Generate token
       const token = this.generateToken({
@@ -132,41 +183,119 @@ class AuthService extends BaseService {
    */
   async googleAuth(profile) {
     try {
+      this.logger.debug('Starting Google OAuth authentication', {
+        profileId: profile.id,
+        provider: profile.provider,
+        displayName: profile.displayName,
+        emailsProvided: profile.emails?.length || 0
+      });
+
       const { id: googleId, emails, displayName, photos } = profile;
       const email = emails[0].value;
       const avatar = photos && photos[0] ? photos[0].value : null;
 
+      this.logger.debug('Extracted profile data', {
+        googleId,
+        email,
+        displayName,
+        hasAvatar: !!avatar
+      });
+
       // Check if user exists
+      this.logger.debug('Searching for existing user', {
+        searchCriteria: { googleId, email }
+      });
+
       let user = await User.findOne({ $or: [{ googleId }, { email }] });
 
       if (user) {
+        this.logger.debug('Existing user found', {
+          userId: user._id,
+          email: user.email,
+          provider: user.provider,
+          hasGoogleId: !!user.googleId,
+          status: user.status
+        });
+
         // Update existing user with Google ID if needed
         if (!user.googleId) {
+          this.logger.debug('Updating user with Google ID', {
+            userId: user._id,
+            previousProvider: user.provider
+          });
+
           user.googleId = googleId;
           user.provider = 'google';
           await user.save();
+
+          this.logger.info('User provider updated to Google', {
+            userId: user._id,
+            email: user.email
+          });
         }
 
         this.logSuccess('User logged in with Google', { userId: user._id, email: user.email });
       } else {
+        this.logger.debug('No existing user found, creating new user');
+
+        // Get default (free) tier for new user
+        const defaultTier = await TierConfig.getDefaultTier();
+        if (!defaultTier) {
+          this.logger.error('Default tier not found during Google auth', {
+            email,
+            googleId
+          });
+          throw new Error('Default tier not found. Please run tier seeder.');
+        }
+
+        this.logger.debug('Default tier retrieved', {
+          tierId: defaultTier._id,
+          tierName: defaultTier.name
+        });
+
         // Create new user
         user = new User({
           email,
           name: displayName,
           googleId,
           provider: 'google',
-          avatar
+          avatar,
+          tier: defaultTier._id
         });
 
         await user.save();
 
-        this.logSuccess('User registered with Google', { userId: user._id, email: user.email });
+        this.logger.debug('New user created', {
+          userId: user._id,
+          email: user.email,
+          provider: user.provider,
+          tier: defaultTier.name
+        });
+
+        this.logSuccess('User registered with Google', {
+          userId: user._id,
+          email: user.email,
+          tier: defaultTier.name
+        });
+
+        // Create default project for new user
+        await this.createDefaultProject(user._id);
       }
 
       // Check if user is active
       if (user.status !== 'active') {
+        this.logger.warn('Inactive account attempted Google login', {
+          userId: user._id,
+          email: user.email,
+          status: user.status
+        });
         throw new Error('Account is not active');
       }
+
+      this.logger.debug('Generating JWT token', {
+        userId: user._id,
+        email: user.email
+      });
 
       // Generate token
       const token = this.generateToken({
@@ -174,11 +303,23 @@ class AuthService extends BaseService {
         email: user.email
       });
 
+      this.logger.debug('Token generated successfully', {
+        userId: user._id,
+        tokenLength: token.length,
+        tokenPreview: `${token.substring(0, 20)}...`
+      });
+
       return {
         user: user.toSafeObject(),
         token
       };
     } catch (error) {
+      this.logger.error('Google auth failed', {
+        error: error.message,
+        stack: error.stack,
+        profileId: profile?.id,
+        email: profile?.emails?.[0]?.value
+      });
       this.logAndThrow(error, 'Google auth');
     }
   }

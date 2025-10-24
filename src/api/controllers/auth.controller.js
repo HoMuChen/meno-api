@@ -106,18 +106,51 @@ class AuthController extends BaseController {
    * Google OAuth callback handler
    */
   googleCallback = this.asyncHandler(async (req, res) => {
+    this.logger.debug('Google OAuth callback initiated', {
+      hasUser: !!req.user,
+      userId: req.user?.id,
+      userEmail: req.user?.emails?.[0]?.value,
+      query: req.query,
+      sessionId: req.sessionID
+    });
+
     // User is attached by passport
     const result = await this.authService.googleAuth(req.user);
 
+    this.logger.debug('Google auth service completed', {
+      userId: result.user._id,
+      email: result.user.email,
+      tokenGenerated: !!result.token,
+      tokenLength: result.token?.length
+    });
+
     // Redirect to frontend with token
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3001';
-    res.redirect(`${frontendUrl}/auth/callback?token=${result.token}`);
+    const redirectUrl = `${frontendUrl}/auth/callback?token=${result.token}`;
+
+    this.logger.info('Redirecting to frontend after Google OAuth', {
+      userId: result.user._id,
+      email: result.user.email,
+      frontendUrl,
+      redirectUrl: `${frontendUrl}/auth/callback?token=***`
+    });
+
+    res.redirect(redirectUrl);
   });
 
   /**
    * Google OAuth failure handler
    */
   googleFailure = this.asyncHandler(async (req, res) => {
+    this.logger.error('Google OAuth authentication failed', {
+      query: req.query,
+      headers: {
+        referer: req.headers.referer,
+        userAgent: req.headers['user-agent']
+      },
+      sessionId: req.sessionID
+    });
+
     throw new UnauthorizedError('Google authentication failed');
   });
 }

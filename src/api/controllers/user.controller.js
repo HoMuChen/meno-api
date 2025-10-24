@@ -180,6 +180,40 @@ class UserController extends BaseController {
 
   /**
    * @swagger
+   * /api/users/me:
+   *   get:
+   *     summary: Get current authenticated user's profile
+   *     description: Returns the profile of the currently authenticated user
+   *     tags: [Users]
+   *     security:
+   *       - bearerAuth: []
+   *     responses:
+   *       200:
+   *         description: Current user profile retrieved successfully
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                   example: true
+   *                 data:
+   *                   $ref: '#/components/schemas/User'
+   *       401:
+   *         description: Unauthorized - authentication required
+   */
+  getCurrentUser = this.asyncHandler(async (req, res) => {
+    this.logger.debug('Getting current user profile', {
+      userId: req.user._id,
+      email: req.user.email
+    });
+
+    return this.sendSuccess(res, req.user.toSafeObject(), 'Current user retrieved successfully');
+  });
+
+  /**
+   * @swagger
    * /api/users/me/usage:
    *   get:
    *     summary: Get current user's monthly usage statistics
