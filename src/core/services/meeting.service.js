@@ -29,12 +29,39 @@ class MeetingService extends BaseService {
    * @returns {Object} Created meeting
    */
   async createMeeting(projectId, userId, meetingData, audioFile) {
+    this.logger.info('Meeting service: createMeeting called', {
+      projectId,
+      userId,
+      meetingData,
+      audioFile: {
+        originalname: audioFile.originalname,
+        mimetype: audioFile.mimetype,
+        size: audioFile.size,
+        path: audioFile.path,
+        filename: audioFile.filename
+      }
+    });
+
     try {
       // Verify user owns the project
+      this.logger.info('Meeting service: verifying project ownership', {
+        projectId,
+        userId
+      });
+
       const ownsProject = await this.projectService.verifyOwnership(projectId, userId);
       if (!ownsProject) {
+        this.logger.error('Meeting service: project ownership verification failed', {
+          projectId,
+          userId
+        });
         throw new Error('Project not found or access denied');
       }
+
+      this.logger.info('Meeting service: project ownership verified', {
+        projectId,
+        userId
+      });
 
       // Generate unique file path for storage
       const timestamp = Date.now();
@@ -70,6 +97,14 @@ class MeetingService extends BaseService {
       }
 
       // Upload file to storage provider
+      this.logger.info('Meeting service: uploading file to storage', {
+        storagePath,
+        localPath: audioFile.path,
+        contentType: audioFile.mimetype,
+        size: audioFile.size,
+        originalName: audioFile.originalname
+      });
+
       const uploadResult = await this.audioStorageProvider.upload(
         storagePath,
         audioFile.path, // Multer saved file path
@@ -82,6 +117,12 @@ class MeetingService extends BaseService {
           }
         }
       );
+
+      this.logger.info('Meeting service: file uploaded to storage successfully', {
+        uri: uploadResult.uri,
+        size: uploadResult.size,
+        storagePath
+      });
 
       // Create meeting with storage URI
       const meeting = new Meeting({
@@ -508,6 +549,30 @@ class MeetingService extends BaseService {
       const meeting = await Meeting.findById(meetingId);
       if (meeting && meeting.transcriptionStatus !== 'completed') {
         await meeting.updateTranscriptionProgress('completed', 100);
+      }
+
+      // Generate title and description for non-streaming services (e.g., Mock)
+      // Note: Gemini streaming service generates this internally during transcribeAudio
+      if (this.transcriptionService.constructor.name === 'MockTranscriptionService') {
+        this.logger.info('Generating title and description for mock transcription', { meetingId });
+        try {
+          // Use Gemini service to generate title/description from the mock transcription
+          const geminiService = require('./gemini-transcription.service');
+          if (geminiService && typeof geminiService.prototype.generateSummary === 'function') {
+            // We'll implement this in a simpler way - just set a default title
+            const meetingDoc = await this._getMeetingByIdInternal(meetingId);
+            if (!meetingDoc.description || meetingDoc.description.trim() === '') {
+              meetingDoc.description = 'Mock transcription completed';
+              await meetingDoc.save();
+              this.logger.info('Updated mock meeting with default description', { meetingId });
+            }
+          }
+        } catch (summaryError) {
+          this.logger.warn('Failed to generate title/description for mock transcription', {
+            meetingId,
+            error: summaryError.message
+          });
+        }
       }
 
       this.logger.info('Transcription completed', {

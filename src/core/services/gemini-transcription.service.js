@@ -15,7 +15,18 @@ class GeminiTranscriptionService extends TranscriptionService {
 
     // Configuration
     this.apiKey = process.env.GEMINI_API_KEY;
-    this.model = process.env.GEMINI_MODEL || 'gemini-2.5-pro';
+
+    // Separate models for different operations
+    // Transcription model: needs audio processing capabilities (e.g., gemini-2.5-pro, gemini-1.5-pro)
+    // Summary model: text-only processing (can use faster/cheaper models like gemini-1.5-flash)
+    this.transcriptionModel = process.env.GEMINI_TRANSCRIPTION_MODEL
+      || process.env.GEMINI_MODEL
+      || 'gemini-2.5-pro';
+
+    this.summaryModel = process.env.GEMINI_SUMMARY_MODEL
+      || process.env.GEMINI_MODEL
+      || 'gemini-1.5-flash';
+
     this.streamTimeout = parseInt(process.env.GEMINI_STREAM_TIMEOUT) || 300000; // 5 min
     this.chunkStallTimeout = parseInt(process.env.GEMINI_CHUNK_STALL_TIMEOUT) || 30000; // 30s
     this.averageSegmentDuration = parseInt(process.env.AVERAGE_SEGMENT_DURATION) || 5000; // 5s
@@ -26,6 +37,12 @@ class GeminiTranscriptionService extends TranscriptionService {
 
     // Initialize Gemini client
     this.genAI = new GoogleGenerativeAI(this.apiKey);
+
+    // Log model configuration
+    logger.info('Gemini service initialized with models', {
+      transcriptionModel: this.transcriptionModel,
+      summaryModel: this.summaryModel
+    });
   }
 
   /**
@@ -41,7 +58,7 @@ class GeminiTranscriptionService extends TranscriptionService {
       this.logger.info('Starting Gemini transcription', {
         audioFilePath,
         meetingId,
-        model: this.model
+        model: this.transcriptionModel
       });
 
       // Update status to processing
@@ -61,19 +78,34 @@ class GeminiTranscriptionService extends TranscriptionService {
         processedSegments: 0
       });
 
-      // Initialize Gemini model
-      const model = this.genAI.getGenerativeModel({ model: this.model });
+      // Initialize Gemini model for transcription (requires audio processing capabilities)
+      const model = this.genAI.getGenerativeModel({ model: this.transcriptionModel });
 
-      // Prepare streaming request
+      // Prepare streaming request with newline-delimited JSON format for true incremental processing
       const prompt = `Transcribe this audio file with speaker diarization and timestamps.
-Return the transcription as a JSON array where each element has:
+
+CRITICAL: Return the transcription as NEWLINE-DELIMITED JSON where EACH LINE is a separate JSON object.
+
+Each line must be a complete, valid JSON object with these fields:
 - startTime: start timestamp in milliseconds
 - endTime: end timestamp in milliseconds
 - speaker: speaker identifier (e.g., "SPEAKER_01", "SPEAKER_02")
 - text: the transcribed text
 - confidence: confidence score between 0 and 1
 
-Return ONLY the JSON array, no additional text.`;
+IMPORTANT FORMAT REQUIREMENTS:
+- Output ONE JSON object per line
+- NO array brackets [ ]
+- NO commas between objects
+- Each line is a standalone valid JSON object
+- Separate objects with newlines only
+
+Example correct format:
+{"startTime":0,"endTime":3000,"speaker":"SPEAKER_01","text":"Hello everyone"}
+{"startTime":3000,"endTime":6000,"speaker":"SPEAKER_02","text":"Hi there"}
+{"startTime":6000,"endTime":9000,"speaker":"SPEAKER_01","text":"Let's begin"}
+
+Do NOT use array format. Each line must be parseable independently.`;
 
       const parts = [
         { text: prompt },
@@ -90,7 +122,7 @@ Return ONLY the JSON array, no additional text.`;
 
       const segments = [];
       let processedSegments = 0;
-      let accumulatedText = '';
+      let lineBuffer = ''; // Buffer for incomplete lines between chunks
       let lastChunkTime = Date.now();
 
       // Set up stall detection
@@ -105,37 +137,46 @@ Return ONLY the JSON array, no additional text.`;
         }
       }, this.chunkStallTimeout);
 
-      // Process streaming chunks
+      // Process streaming chunks with line-by-line parsing for true incremental processing
       for await (const chunk of result.stream) {
         lastChunkTime = Date.now();
 
         const chunkText = chunk.text();
         if (!chunkText) continue;
 
-        accumulatedText += chunkText;
+        // Parse with buffer management (handles incomplete lines across chunks)
+        const { segments: parsedSegments, buffer: newBuffer } =
+          this._parseStreamingChunks(chunkText, lineBuffer);
 
-        // Try to parse complete JSON segments from accumulated text
-        const parsedSegments = this._parseStreamingChunks(accumulatedText);
+        lineBuffer = newBuffer; // Update buffer with incomplete line for next chunk
 
         if (parsedSegments.length > 0) {
-          // Process new segments
+          this.logger.debug('Parsed segments from chunk', {
+            meetingId,
+            segmentCount: parsedSegments.length,
+            bufferSize: lineBuffer.length
+          });
+
+          // Process new segments immediately (true incremental processing)
           for (const rawSegment of parsedSegments) {
             const segment = this._mapGeminiSegment(rawSegment);
             segments.push(segment);
 
-            // Save segment immediately to DB
+            // Save segment immediately to DB for real-time access
             try {
               await this.transcriptionDataService.saveTranscriptions(meetingId, [segment]);
               processedSegments++;
 
-              // Update progress
+              // Update progress in real-time
               const progress = Math.min(95, Math.floor((processedSegments / estimatedTotal) * 100));
               await this._updateMeetingProgress(meetingId, progress, processedSegments);
 
-              this.logger.debug('Segment saved', {
+              this.logger.debug('Segment saved (real-time)', {
                 meetingId,
                 segmentIndex: processedSegments,
-                progress
+                progress,
+                speaker: segment.speaker,
+                textPreview: segment.text.substring(0, 50)
               });
             } catch (saveError) {
               this.logger.error('Error saving segment', {
@@ -146,9 +187,6 @@ Return ONLY the JSON array, no additional text.`;
               // Continue processing other segments
             }
           }
-
-          // Clear processed text
-          accumulatedText = '';
         }
 
         await this._updateTranscriptionMetadata(meetingId, {
@@ -156,23 +194,68 @@ Return ONLY the JSON array, no additional text.`;
         });
       }
 
+      // Process any remaining buffered content after stream ends
+      if (lineBuffer.trim()) {
+        this.logger.info('Processing remaining buffered content', {
+          meetingId,
+          bufferSize: lineBuffer.length
+        });
+
+        // Add final newline to trigger parsing of last line
+        const { segments: finalSegments } = this._parseStreamingChunks('\n', lineBuffer);
+
+        if (finalSegments.length > 0) {
+          for (const rawSegment of finalSegments) {
+            const segment = this._mapGeminiSegment(rawSegment);
+            segments.push(segment);
+
+            try {
+              await this.transcriptionDataService.saveTranscriptions(meetingId, [segment]);
+              processedSegments++;
+
+              const progress = Math.min(95, Math.floor((processedSegments / estimatedTotal) * 100));
+              await this._updateMeetingProgress(meetingId, progress, processedSegments);
+
+              this.logger.debug('Final buffered segment saved', {
+                meetingId,
+                segmentIndex: processedSegments
+              });
+            } catch (saveError) {
+              this.logger.error('Error saving final segment', {
+                error: saveError.message,
+                meetingId,
+                segmentIndex: processedSegments
+              });
+            }
+          }
+        }
+      }
+
       clearInterval(stallCheckInterval);
 
-      // Generate title and description
-      this.logger.info('Generating meeting title and description', { meetingId });
-      const summary = await this.generateSummary(meetingId);
+      // Generate title and description from transcription
+      this.logger.info('Generating meeting title and description from transcription', { meetingId });
+      try {
+        const summary = await this.generateSummary(meetingId);
 
-      // Update meeting with generated title and description
-      const meetingDoc = await this.meetingService.getMeetingById(meetingId);
-      meetingDoc.title = summary.title;
-      meetingDoc.description = summary.description;
-      await meetingDoc.save();
+        // Update meeting with generated title and description
+        const meetingDoc = await this.meetingService._getMeetingByIdInternal(meetingId);
+        meetingDoc.title = summary.title;
+        meetingDoc.description = summary.description;
+        await meetingDoc.save();
 
-      this.logger.info('Meeting updated with generated summary', {
-        meetingId,
-        title: summary.title,
-        hasDescription: !!summary.description
-      });
+        this.logger.info('Meeting updated with auto-generated title and description', {
+          meetingId,
+          title: summary.title,
+          hasDescription: !!summary.description
+        });
+      } catch (summaryError) {
+        // Log but don't fail transcription if summary generation fails
+        this.logger.warn('Failed to generate title/description, continuing with transcription completion', {
+          meetingId,
+          error: summaryError.message
+        });
+      }
 
       // Finalize
       await this._updateMeetingStatus(meetingId, 'completed', 100);
@@ -204,29 +287,71 @@ Return ONLY the JSON array, no additional text.`;
   }
 
   /**
-   * Parse streaming chunks to extract complete JSON segments
-   * @param {string} text - Accumulated text from stream
-   * @returns {Array} Parsed segments
+   * Parse streaming chunks line-by-line for incremental processing
+   * Handles newline-delimited JSON format where each line is a complete segment
+   * @param {string} text - New text chunk from stream
+   * @param {string} buffer - Buffered incomplete line from previous chunk
+   * @returns {Object} { segments: Array, buffer: string }
    */
-  _parseStreamingChunks(text) {
+  _parseStreamingChunks(text, buffer = '') {
     try {
-      // Remove markdown code blocks if present
-      let cleanText = text.trim();
-      cleanText = cleanText.replace(/```json\n?/g, '').replace(/```\n?/g, '');
+      // Combine buffer with new text
+      const fullText = buffer + text;
 
-      // Try to parse as complete JSON array
-      const parsed = JSON.parse(cleanText);
+      // Split by newlines to get individual JSON objects
+      const lines = fullText.split('\n');
 
-      if (Array.isArray(parsed)) {
-        return parsed;
-      } else if (typeof parsed === 'object') {
-        return [parsed];
+      // Keep last line as buffer (might be incomplete/partial)
+      const incompleteLineBuffer = lines.pop() || '';
+
+      // Parse each complete line as JSON
+      const segments = [];
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed) continue; // Skip empty lines
+
+        // Remove markdown code blocks if present
+        let cleaned = trimmed.replace(/```json\n?/g, '').replace(/```\n?$/g, '');
+
+        // Handle potential array format (fallback for backward compatibility)
+        if (cleaned.startsWith('[')) {
+          // Try parsing as array
+          try {
+            const arrayParsed = JSON.parse(cleaned);
+            if (Array.isArray(arrayParsed)) {
+              segments.push(...arrayParsed);
+              continue;
+            }
+          } catch (e) {
+            // Not a valid array, try as single object
+          }
+        }
+
+        // Remove trailing commas or array brackets (in case of mixed format)
+        cleaned = cleaned.replace(/,\s*$/, '').replace(/^\[|\]$/g, '');
+
+        try {
+          const segment = JSON.parse(cleaned);
+          if (segment && typeof segment === 'object' && !Array.isArray(segment)) {
+            segments.push(segment);
+          }
+        } catch (parseError) {
+          this.logger.warn('Failed to parse line as JSON', {
+            line: cleaned.substring(0, 100),
+            error: parseError.message
+          });
+          // Continue processing other lines
+        }
       }
 
-      return [];
+      return { segments, buffer: incompleteLineBuffer };
     } catch (error) {
-      // Not yet a complete JSON, continue accumulating
-      return [];
+      this.logger.error('Error parsing streaming chunks', {
+        error: error.message,
+        stack: error.stack
+      });
+      // Return empty segments but preserve text in buffer for next attempt
+      return { segments: [], buffer: buffer + text };
     }
   }
 
@@ -378,7 +503,10 @@ Return ONLY the JSON array, no additional text.`;
    */
   async generateSummary(meetingId) {
     try {
-      this.logger.info('Generating meeting summary', { meetingId });
+      this.logger.info('Generating meeting summary', {
+        meetingId,
+        model: this.summaryModel
+      });
 
       // Get all transcription segments
       const transcriptionData = await this.transcriptionDataService.getTranscriptions(meetingId, {
@@ -396,8 +524,8 @@ Return ONLY the JSON array, no additional text.`;
         .map(t => `${t.speaker}: ${t.text}`)
         .join('\n');
 
-      // Use Gemini to generate title and description
-      const model = this.genAI.getGenerativeModel({ model: this.model });
+      // Use Gemini to generate title and description (text-only processing)
+      const model = this.genAI.getGenerativeModel({ model: this.summaryModel });
 
       const prompt = `Based on this meeting transcript, generate a concise title and description.
 
@@ -456,7 +584,10 @@ Do not include any markdown formatting or code blocks, just the JSON object.`;
    */
   async* generateSummaryStream(meetingId) {
     try {
-      this.logger.info('Generating meeting summary with streaming', { meetingId });
+      this.logger.info('Generating meeting summary with streaming', {
+        meetingId,
+        model: this.summaryModel
+      });
 
       // Get all transcription segments
       const transcriptionData = await this.transcriptionDataService.getTranscriptions(meetingId, {
@@ -474,8 +605,8 @@ Do not include any markdown formatting or code blocks, just the JSON object.`;
         .map(t => `${t.speaker}: ${t.text}`)
         .join('\n');
 
-      // Use Gemini to generate summary with streaming
-      const model = this.genAI.getGenerativeModel({ model: this.model });
+      // Use Gemini to generate summary with streaming (text-only processing)
+      const model = this.genAI.getGenerativeModel({ model: this.summaryModel });
 
       const prompt = `**CRITICAL REQUIREMENTS:**
 1. You MUST generate the entire summary in the EXACT SAME LANGUAGE as the transcript below

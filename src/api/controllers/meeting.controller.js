@@ -15,18 +15,50 @@ class MeetingController extends BaseController {
    * Create meeting
    */
   create = this.asyncHandler(async (req, res) => {
+    this.logger.info('Meeting controller: create method called', {
+      url: req.url,
+      method: req.method,
+      projectId: req.params.projectId,
+      body: req.body,
+      hasFile: !!req.file,
+      fileName: req.file ? req.file.originalname : 'no file',
+      fileSize: req.file ? req.file.size : 0,
+      fileMimeType: req.file ? req.file.mimetype : 'unknown'
+    });
+
     if (!req.file) {
+      this.logger.error('Meeting controller: no file found in request after upload middleware', {
+        url: req.url,
+        projectId: req.params.projectId,
+        body: req.body
+      });
       throw new BadRequestError('Audio file is required');
     }
 
     const userId = this.getUserId(req);
     const { projectId } = req.params;
+
+    this.logger.info('Meeting controller: calling meetingService.createMeeting', {
+      projectId,
+      userId,
+      title: req.body.title,
+      fileName: req.file.filename,
+      fileSize: req.file.size
+    });
+
     const meeting = await this.meetingService.createMeeting(
       projectId,
       userId,
       req.body,
       req.file
     );
+
+    this.logger.info('Meeting controller: meeting created successfully', {
+      meetingId: meeting._id,
+      projectId,
+      userId,
+      title: meeting.title
+    });
 
     return this.sendCreated(res, meeting, 'Meeting created successfully');
   });

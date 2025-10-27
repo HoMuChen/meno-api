@@ -3,9 +3,18 @@
  * Request validation schemas for meeting endpoints
  */
 const Joi = require('joi');
+const logger = require('../../components/logging/logger');
 
 const validate = (schema) => {
   return (req, res, next) => {
+    logger.info('Meeting validator: validating request body', {
+      url: req.url,
+      method: req.method,
+      body: req.body,
+      hasFile: !!req.file,
+      fileName: req.file ? req.file.originalname : 'no file'
+    });
+
     const { error } = schema.validate(req.body, { abortEarly: false });
 
     if (error) {
@@ -14,12 +23,24 @@ const validate = (schema) => {
         message: detail.message
       }));
 
+      logger.error('Meeting validator: validation failed', {
+        url: req.url,
+        body: req.body,
+        validationErrors: errors,
+        errorCount: errors.length
+      });
+
       return res.status(400).json({
         success: false,
         message: 'Validation error',
         errors
       });
     }
+
+    logger.info('Meeting validator: validation passed', {
+      url: req.url,
+      body: req.body
+    });
 
     next();
   };
@@ -67,7 +88,16 @@ const updateMeetingSchema = Joi.object({
  * Validate audio file upload
  */
 const validateAudioFile = (req, res, next) => {
+  logger.info('Audio file validator: checking file', {
+    url: req.url,
+    hasFile: !!req.file,
+    fileName: req.file ? req.file.originalname : 'no file'
+  });
+
   if (!req.file) {
+    logger.error('Audio file validator: no file provided', {
+      url: req.url
+    });
     return res.status(400).json({
       success: false,
       message: 'Audio file is required'
@@ -91,8 +121,9 @@ const validateAudioFile = (req, res, next) => {
     'audio/x-wav',
     'audio/wave',
 
-    // WebM
+    // WebM (audio and video containers for audio recordings)
     'audio/webm',
+    'video/webm',
 
     // OGG
     'audio/ogg',
@@ -104,6 +135,11 @@ const validateAudioFile = (req, res, next) => {
   ];
 
   if (!allowedMimeTypes.includes(req.file.mimetype)) {
+    logger.error('Audio file validator: invalid mime type', {
+      url: req.url,
+      mimetype: req.file.mimetype,
+      fileName: req.file.originalname
+    });
     return res.status(400).json({
       success: false,
       message: 'Invalid audio format. Allowed formats: MP3, M4A, AAC, WAV, WebM, OGG, FLAC'
@@ -113,11 +149,24 @@ const validateAudioFile = (req, res, next) => {
   const maxSize = parseInt(process.env.MAX_AUDIO_FILE_SIZE) || 104857600; // 100MB default
 
   if (req.file.size > maxSize) {
+    logger.error('Audio file validator: file size exceeds limit', {
+      url: req.url,
+      fileSize: req.file.size,
+      maxSize: maxSize,
+      fileName: req.file.originalname
+    });
     return res.status(400).json({
       success: false,
       message: `File size exceeds maximum allowed size of ${maxSize / 1024 / 1024}MB`
     });
   }
+
+  logger.info('Audio file validator: file validation passed', {
+    url: req.url,
+    mimetype: req.file.mimetype,
+    size: req.file.size,
+    fileName: req.file.originalname
+  });
 
   next();
 };
