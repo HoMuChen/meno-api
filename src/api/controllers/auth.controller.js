@@ -126,13 +126,13 @@ class AuthController extends BaseController {
 
     // Redirect to frontend with token
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3001';
-    const redirectUrl = `${frontendUrl}/auth/callback?token=${result.token}`;
+    const redirectUrl = `${frontendUrl}?token=${result.token}`;
 
     this.logger.info('Redirecting to frontend after Google OAuth', {
       userId: result.user._id,
       email: result.user.email,
       frontendUrl,
-      redirectUrl: `${frontendUrl}/auth/callback?token=***`
+      redirectUrl: `${frontendUrl}?token=***`
     });
 
     res.redirect(redirectUrl);
