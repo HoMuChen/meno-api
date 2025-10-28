@@ -91,7 +91,6 @@ Each line must be a complete, valid JSON object with these fields:
 - endTime: end timestamp in milliseconds
 - speaker: speaker identifier (e.g., "SPEAKER_01", "SPEAKER_02")
 - text: the transcribed text
-- confidence: confidence score between 0 and 1
 
 IMPORTANT FORMAT REQUIREMENTS:
 - Output ONE JSON object per line
@@ -123,6 +122,7 @@ Do NOT use array format. Each line must be parseable independently.`;
       const segments = [];
       let processedSegments = 0;
       let lineBuffer = ''; // Buffer for incomplete lines between chunks
+      let segmentBuffer = null; // Buffer for merging consecutive same-speaker segments
       let lastChunkTime = Date.now();
 
       // Set up stall detection
@@ -157,34 +157,46 @@ Do NOT use array format. Each line must be parseable independently.`;
             bufferSize: lineBuffer.length
           });
 
-          // Process new segments immediately (true incremental processing)
+          // Process new segments with speaker merging
           for (const rawSegment of parsedSegments) {
             const segment = this._mapGeminiSegment(rawSegment);
             segments.push(segment);
 
-            // Save segment immediately to DB for real-time access
-            try {
-              await this.transcriptionDataService.saveTranscriptions(meetingId, [segment]);
-              processedSegments++;
+            // Merge consecutive segments with same speaker
+            if (!segmentBuffer) {
+              // First segment - initialize buffer
+              segmentBuffer = { ...segment };
+            } else if (segmentBuffer.speaker === segment.speaker) {
+              // Same speaker - merge by extending endTime and appending text
+              segmentBuffer.endTime = segment.endTime;
+              segmentBuffer.text = segmentBuffer.text + ' ' + segment.text;
+            } else {
+              // Different speaker - flush buffer and start new one
+              try {
+                await this.transcriptionDataService.saveTranscriptions(meetingId, [segmentBuffer]);
+                processedSegments++;
 
-              // Update progress in real-time
-              const progress = Math.min(95, Math.floor((processedSegments / estimatedTotal) * 100));
-              await this._updateMeetingProgress(meetingId, progress, processedSegments);
+                // Update progress in real-time
+                const progress = Math.min(95, Math.floor((processedSegments / estimatedTotal) * 100));
+                await this._updateMeetingProgress(meetingId, progress, processedSegments);
 
-              this.logger.debug('Segment saved (real-time)', {
-                meetingId,
-                segmentIndex: processedSegments,
-                progress,
-                speaker: segment.speaker,
-                textPreview: segment.text.substring(0, 50)
-              });
-            } catch (saveError) {
-              this.logger.error('Error saving segment', {
-                error: saveError.message,
-                meetingId,
-                segmentIndex: processedSegments
-              });
-              // Continue processing other segments
+                this.logger.debug('Merged segment saved', {
+                  meetingId,
+                  segmentIndex: processedSegments,
+                  progress,
+                  speaker: segmentBuffer.speaker,
+                  textPreview: segmentBuffer.text.substring(0, 50)
+                });
+              } catch (saveError) {
+                this.logger.error('Error saving merged segment', {
+                  error: saveError.message,
+                  meetingId,
+                  segmentIndex: processedSegments
+                });
+              }
+
+              // Start new buffer with current segment
+              segmentBuffer = { ...segment };
             }
           }
         }
@@ -209,25 +221,54 @@ Do NOT use array format. Each line must be parseable independently.`;
             const segment = this._mapGeminiSegment(rawSegment);
             segments.push(segment);
 
-            try {
-              await this.transcriptionDataService.saveTranscriptions(meetingId, [segment]);
-              processedSegments++;
+            // Apply same merging logic to final segments
+            if (!segmentBuffer) {
+              segmentBuffer = { ...segment };
+            } else if (segmentBuffer.speaker === segment.speaker) {
+              segmentBuffer.endTime = segment.endTime;
+              segmentBuffer.text = segmentBuffer.text + ' ' + segment.text;
+            } else {
+              try {
+                await this.transcriptionDataService.saveTranscriptions(meetingId, [segmentBuffer]);
+                processedSegments++;
 
-              const progress = Math.min(95, Math.floor((processedSegments / estimatedTotal) * 100));
-              await this._updateMeetingProgress(meetingId, progress, processedSegments);
+                const progress = Math.min(95, Math.floor((processedSegments / estimatedTotal) * 100));
+                await this._updateMeetingProgress(meetingId, progress, processedSegments);
 
-              this.logger.debug('Final buffered segment saved', {
-                meetingId,
-                segmentIndex: processedSegments
-              });
-            } catch (saveError) {
-              this.logger.error('Error saving final segment', {
-                error: saveError.message,
-                meetingId,
-                segmentIndex: processedSegments
-              });
+                this.logger.debug('Final merged segment saved', {
+                  meetingId,
+                  segmentIndex: processedSegments
+                });
+              } catch (saveError) {
+                this.logger.error('Error saving final merged segment', {
+                  error: saveError.message,
+                  meetingId,
+                  segmentIndex: processedSegments
+                });
+              }
+
+              segmentBuffer = { ...segment };
             }
           }
+        }
+      }
+
+      // Flush the final segmentBuffer if it exists
+      if (segmentBuffer) {
+        try {
+          await this.transcriptionDataService.saveTranscriptions(meetingId, [segmentBuffer]);
+          processedSegments++;
+
+          this.logger.info('Final segment buffer flushed', {
+            meetingId,
+            speaker: segmentBuffer.speaker,
+            duration: segmentBuffer.endTime - segmentBuffer.startTime
+          });
+        } catch (saveError) {
+          this.logger.error('Error flushing final segment buffer', {
+            error: saveError.message,
+            meetingId
+          });
         }
       }
 
@@ -365,8 +406,7 @@ Do NOT use array format. Each line must be parseable independently.`;
       startTime: geminiSegment.startTime || 0,
       endTime: geminiSegment.endTime || 0,
       speaker: this._mapSpeakerLabel(geminiSegment.speaker),
-      text: geminiSegment.text || '',
-      confidence: geminiSegment.confidence || null
+      text: geminiSegment.text || ''
     };
   }
 

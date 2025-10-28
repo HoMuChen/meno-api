@@ -25,7 +25,6 @@ class TranscriptionDataService extends BaseService {
         endTime: segment.endTime,
         speaker: segment.speaker,
         text: segment.text,
-        confidence: segment.confidence || null,
         isEdited: false
       }));
 

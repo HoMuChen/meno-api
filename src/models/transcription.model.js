@@ -36,11 +36,6 @@ const mongoose = require('mongoose');
  *           type: string
  *           description: Transcribed text segment
  *           maxLength: 5000
- *         confidence:
- *           type: number
- *           description: Transcription confidence score (0-1)
- *           minimum: 0
- *           maximum: 1
  *         isEdited:
  *           type: boolean
  *           description: Whether the transcription was manually edited
@@ -84,12 +79,6 @@ const transcriptionSchema = new mongoose.Schema(
       required: [true, 'Transcription text is required'],
       trim: true,
       maxlength: [5000, 'Transcription text cannot exceed 5000 characters']
-    },
-    confidence: {
-      type: Number,
-      min: [0, 'Confidence must be between 0 and 1'],
-      max: [1, 'Confidence must be between 0 and 1'],
-      default: null
     },
     isEdited: {
       type: Boolean,
