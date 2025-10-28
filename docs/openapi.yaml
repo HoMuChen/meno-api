@@ -206,6 +206,52 @@ components:
         updatedAt:
           type: string
           format: date-time
+    TierConfig:
+      type: object
+      required:
+        - name
+        - displayName
+        - limits
+      properties:
+        _id:
+          type: string
+          description: Auto-generated tier ID
+        name:
+          type: string
+          enum:
+            - free
+            - plus
+            - pro
+          description: Unique tier identifier
+        displayName:
+          type: string
+          description: Human-readable tier name
+        limits:
+          type: object
+          properties:
+            monthlyDuration:
+              type: number
+              description: Monthly audio duration limit in seconds (-1 for unlimited)
+            maxFileSize:
+              type: number
+              description: Maximum file size in bytes
+        features:
+          type: array
+          items:
+            type: string
+          description: Array of feature flags enabled for this tier
+        price:
+          type: number
+          description: Monthly price in cents (0 for free tier)
+        isActive:
+          type: boolean
+          description: Whether this tier is currently available
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
     Transcription:
       type: object
       required:
@@ -284,6 +330,29 @@ components:
             - inactive
             - suspended
           description: User account status
+        tier:
+          type: string
+          description: Reference to user's subscription tier
+        tierStartDate:
+          type: string
+          format: date-time
+          description: When the current tier started
+        currentMonthUsage:
+          type: object
+          properties:
+            duration:
+              type: number
+              description: Cached total duration used this month (seconds)
+            lastReset:
+              type: string
+              format: date-time
+              description: When the usage cache was last reset
+            month:
+              type: number
+              description: Month this cache is for (1-12)
+            year:
+              type: number
+              description: Year this cache is for
         createdAt:
           type: string
           format: date-time
@@ -1486,6 +1555,33 @@ paths:
                 $ref: '#/components/schemas/Error'
         '500':
           description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/users/me:
+    get:
+      summary: Get current authenticated user's profile
+      description: Returns the profile of the currently authenticated user
+      tags:
+        - Users
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Current user profile retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/User'
+        '401':
+          description: Unauthorized - authentication required
           content:
             application/json:
               schema:
