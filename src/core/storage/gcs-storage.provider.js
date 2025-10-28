@@ -7,7 +7,7 @@
  * Configuration:
  * - GCS_PROJECT_ID: Google Cloud project ID
  * - GCS_KEYFILE_PATH: Path to service account key file
- * - GCS_BUCKET: Default bucket name
+ * - GCS_BUCKET_NAME: Default bucket name
  */
 const StorageProvider = require('./storage-provider.interface');
 
@@ -15,7 +15,7 @@ class GCSStorageProvider extends StorageProvider {
   constructor(logger, config = {}) {
     super();
     this.logger = logger;
-    this.bucket = config.bucket || process.env.GCS_BUCKET;
+    this.bucket = config.bucket || process.env.GCS_BUCKET_NAME;
     this.initialized = false;
 
     // Lazy initialization - only load GCS SDK when actually used
@@ -37,20 +37,92 @@ class GCSStorageProvider extends StorageProvider {
       // Dynamic import to avoid dependency if not using GCS
       const { Storage } = require('@google-cloud/storage');
 
-      this.storageClient = new Storage(this.config);
+      // Configure Storage client with explicit scopes for better permission control
+      const storageConfig = {
+        ...this.config,
+        // Explicitly request storage scopes
+        scopes: ['https://www.googleapis.com/auth/devstorage.read_write']
+      };
+
+      // Remove keyFilename if not provided to use Application Default Credentials
+      if (!storageConfig.keyFilename) {
+        delete storageConfig.keyFilename;
+      }
+
+      this.storageClient = new Storage(storageConfig);
       this.initialized = true;
+
+      // Determine authentication method for logging
+      const authMethod = this.config.keyFilename
+        ? `Service Account Key (${this.config.keyFilename})`
+        : 'Application Default Credentials (ADC)';
 
       this.logger.info('GCS storage provider initialized', {
         projectId: this.config.projectId,
-        bucket: this.bucket
+        bucket: this.bucket,
+        authMethod,
+        scopes: storageConfig.scopes
       });
+
+      // Verify access by testing bucket permissions
+      await this._verifyBucketAccess();
     } catch (error) {
       this.logger.error('Failed to initialize GCS storage provider', {
-        error: error.message
+        error: error.message,
+        keyFilePath: this.config.keyFilename || 'none (using ADC)'
       });
+
+      // Provide helpful error messages for common issues
+      if (error.message.includes('scope')) {
+        throw new Error(
+          'GCS authorization failed: Insufficient scopes. ' +
+            'On GCE, ensure instance has "storage-rw" or "cloud-platform" scope. ' +
+            'With service account key, ensure it has "Storage Object Admin" role.'
+        );
+      }
+
       throw new Error(
         'GCS Storage not available. Install @google-cloud/storage: npm install @google-cloud/storage'
       );
+    }
+  }
+
+  /**
+   * Verify bucket access on initialization
+   * @private
+   */
+  async _verifyBucketAccess() {
+    try {
+      const bucket = this.storageClient.bucket(this.bucket);
+      const [exists] = await bucket.exists();
+
+      if (!exists) {
+        this.logger.warn('GCS bucket does not exist', { bucket: this.bucket });
+        throw new Error(`Bucket "${this.bucket}" does not exist`);
+      }
+
+      // Test write permissions with a minimal metadata operation
+      await bucket.getMetadata();
+
+      this.logger.info('GCS bucket access verified', {
+        bucket: this.bucket,
+        permissions: 'read/write'
+      });
+    } catch (error) {
+      this.logger.error('GCS bucket access verification failed', {
+        error: error.message,
+        bucket: this.bucket
+      });
+
+      // Provide specific guidance based on error type
+      if (error.code === 403 || error.message.includes('scope')) {
+        throw new Error(
+          `GCS authorization error: Insufficient permissions for bucket "${this.bucket}". ` +
+            'Ensure service account has "Storage Object Admin" role and instance has correct scopes.'
+        );
+      }
+
+      throw error;
     }
   }
 

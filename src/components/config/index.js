@@ -20,7 +20,7 @@ const config = {
     provider: process.env.STORAGE_PROVIDER || 'local',
     localPath: process.env.LOCAL_STORAGE_PATH || './storage',
     gcsBucket: process.env.GCS_BUCKET_NAME,
-    gcsKeyFile: process.env.GCS_KEY_FILE
+    gcsKeyFile: process.env.GCS_KEYFILE_PATH
   },
 
   logging: {

@@ -196,7 +196,7 @@ LOCAL_STORAGE_PATH=./storage
 
 # GCS Configuration (if using GCS)
 GCS_PROJECT_ID=your-project-id
-GCS_BUCKET=meno-audio-bucket
+GCS_BUCKET_NAME=meno-audio-bucket
 GCS_KEYFILE_PATH=/path/to/service-account-key.json
 ```
 
@@ -210,13 +210,30 @@ npm install @google-cloud/storage
 ```
 
 ### Step 2: Configure GCS
+
+**For Development (using service account key file):**
 ```bash
 # Set environment variables
 export STORAGE_PROVIDER=gcs
 export GCS_PROJECT_ID=your-project-id
-export GCS_BUCKET=meno-audio-bucket
+export GCS_BUCKET_NAME=meno-audio-bucket
 export GCS_KEYFILE_PATH=/path/to/service-account-key.json
 ```
+
+**For Production on GCE (using Application Default Credentials):**
+```bash
+# Set environment variables (no key file needed)
+export STORAGE_PROVIDER=gcs
+export GCS_PROJECT_ID=your-project-id
+export GCS_BUCKET_NAME=meno-audio-bucket
+
+# IMPORTANT: Ensure GCE instance has correct scopes and IAM roles
+# See docs/GCS_GCE_SETUP.md for detailed instructions
+```
+
+**Required GCE Configuration:**
+- Instance scope: `https://www.googleapis.com/auth/devstorage.read_write` or `cloud-platform`
+- Service account role: `roles/storage.objectAdmin` (minimum)
 
 ### Step 3: Migrate Existing Files
 ```bash
@@ -229,6 +246,16 @@ gsutil -m cp -r ./storage/audio-files/* gs://meno-audio-bucket/
 # Run migration to update URIs from local:// to gcs://
 # (You may need a custom script for this step)
 ```
+
+### Troubleshooting
+
+**Error: "Provided scope(s) are not authorized"**
+
+This error occurs on GCE when the instance lacks proper storage scopes. See [docs/GCS_GCE_SETUP.md](docs/GCS_GCE_SETUP.md) for:
+- Checking current instance configuration
+- Updating instance scopes (requires restart)
+- Verifying IAM roles
+- Testing bucket access
 
 ### Step 5: Restart Application
 ```bash

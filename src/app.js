@@ -52,7 +52,7 @@ const createApp = () => {
   const audioStorageProvider = StorageFactory.createProvider(logger, {
     provider: process.env.STORAGE_PROVIDER || 'local',
     basePath: process.env.LOCAL_STORAGE_PATH || './storage',
-    bucket: process.env.GCS_BUCKET || 'audio-files',
+    bucket: process.env.GCS_BUCKET_NAME || 'audio-files',
     // GCS configuration
     projectId: process.env.GCS_PROJECT_ID,
     keyFilename: process.env.GCS_KEYFILE_PATH

@@ -6,7 +6,7 @@
  * - STORAGE_PROVIDER: 'local' or 'gcs' (default: 'local')
  * - LOCAL_STORAGE_PATH: Path for local storage (default: './storage')
  * - GCS_PROJECT_ID: Google Cloud project ID
- * - GCS_BUCKET: GCS bucket name
+ * - GCS_BUCKET_NAME: GCS bucket name
  * - GCS_KEYFILE_PATH: Path to GCS service account key
  */
 const LocalStorageProvider = require('./local-storage.provider');
@@ -34,7 +34,7 @@ class StorageFactory {
       case 'gcs':
         return new GCSStorageProvider(logger, {
           projectId: config.projectId || process.env.GCS_PROJECT_ID,
-          bucket: config.bucket || process.env.GCS_BUCKET,
+          bucket: config.bucket || process.env.GCS_BUCKET_NAME,
           keyFilename: config.keyFilename || process.env.GCS_KEYFILE_PATH
         });
 
