@@ -3,28 +3,22 @@
  * Handles HTTP requests for transcription endpoints
  */
 const BaseController = require('./base.controller');
-const Meeting = require('../../models/meeting.model');
-const { NotFoundError, ForbiddenError, BadRequestError } = require('../../utils/errors');
+const { BadRequestError } = require('../../utils/errors');
 
 class TranscriptionController extends BaseController {
-  constructor(transcriptionDataService, logger, authorizationService) {
+  constructor(transcriptionDataService, logger) {
     super(transcriptionDataService, logger);
     this.transcriptionDataService = transcriptionDataService;
-    this.authorizationService = authorizationService;
   }
 
     /**
    * list
    */
   list = this.asyncHandler(async (req, res) => {
-    const userId = this.getUserId(req);
     const { meetingId } = req.params;
     const { page, limit, sort } = req.query;
 
-    // Verify user has access to this meeting
-    const meeting = await Meeting.findById(meetingId).populate('projectId');
-    this.authorizationService.verifyMeetingOwnership(meeting, userId);
-
+    // Meeting ownership already verified by middleware (req.meeting available)
     const result = await this.transcriptionDataService.getTranscriptions(meetingId, {
       page,
       limit,
@@ -38,12 +32,8 @@ class TranscriptionController extends BaseController {
    * Get ById
    */
   getById = this.asyncHandler(async (req, res) => {
-    const userId = this.getUserId(req);
+    // Meeting ownership already verified by middleware (req.meeting available)
     const transcription = await this.transcriptionDataService.getTranscriptionById(req.params.id);
-
-    // Verify ownership through meeting → project
-    const meeting = await Meeting.findById(transcription.meetingId).populate('projectId');
-    this.authorizationService.verifyMeetingOwnership(meeting, userId);
 
     return this.sendSuccess(res, transcription);
   });
@@ -52,15 +42,7 @@ class TranscriptionController extends BaseController {
    * Update
    */
   update = this.asyncHandler(async (req, res) => {
-    const userId = this.getUserId(req);
-
-    // First get the transcription to verify ownership
-    const transcription = await this.transcriptionDataService.getTranscriptionById(req.params.id);
-
-    // Verify ownership through meeting → project
-    const meeting = await Meeting.findById(transcription.meetingId).populate('projectId');
-    this.authorizationService.verifyMeetingOwnership(meeting, userId);
-
+    // Meeting ownership already verified by middleware (req.meeting available)
     const updatedTranscription = await this.transcriptionDataService.updateTranscription(req.params.id, req.body);
 
     return this.sendSuccess(res, updatedTranscription, 'Transcription updated successfully');
@@ -70,7 +52,6 @@ class TranscriptionController extends BaseController {
    * search
    */
   search = this.asyncHandler(async (req, res) => {
-    const userId = this.getUserId(req);
     const { meetingId } = req.params;
     const { q, page, limit } = req.query;
 
@@ -78,10 +59,7 @@ class TranscriptionController extends BaseController {
       throw new BadRequestError('Search query is required');
     }
 
-    // Verify user has access to this meeting
-    const meeting = await Meeting.findById(meetingId).populate('projectId');
-    this.authorizationService.verifyMeetingOwnership(meeting, userId);
-
+    // Meeting ownership already verified by middleware (req.meeting available)
     const result = await this.transcriptionDataService.searchTranscriptions(meetingId, q, {
       page,
       limit
@@ -94,14 +72,10 @@ class TranscriptionController extends BaseController {
    * Get BySpeaker
    */
   getBySpeaker = this.asyncHandler(async (req, res) => {
-    const userId = this.getUserId(req);
     const { meetingId, speaker } = req.params;
     const { page, limit } = req.query;
 
-    // Verify user has access to this meeting
-    const meeting = await Meeting.findById(meetingId).populate('projectId');
-    this.authorizationService.verifyMeetingOwnership(meeting, userId);
-
+    // Meeting ownership already verified by middleware (req.meeting available)
     const result = await this.transcriptionDataService.getTranscriptionsBySpeaker(meetingId, speaker, {
       page,
       limit
@@ -115,12 +89,10 @@ class TranscriptionController extends BaseController {
    * Polling endpoint for real-time progress updates
    */
   getStatus = this.asyncHandler(async (req, res) => {
-    const userId = this.getUserId(req);
     const { meetingId } = req.params;
 
-    // Verify user has access to this meeting
-    const meeting = await Meeting.findById(meetingId).populate('projectId');
-    this.authorizationService.verifyMeetingOwnership(meeting, userId);
+    // Meeting ownership already verified by middleware (req.meeting available)
+    const meeting = req.meeting;
 
     // Build status response
     const statusData = {

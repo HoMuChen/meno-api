@@ -4,6 +4,7 @@
  */
 const express = require('express');
 const { authenticate } = require('../middleware/auth.middleware');
+const { requireMeetingOwnership, requireProjectOwnership } = require('../middleware/authorization.middleware');
 const { handleStreamingUpload } = require('../middleware/streaming-upload.middleware');
 const { validateCreateMeeting, validateUpdateMeeting } = require('../validators/meeting.validator');
 
@@ -77,7 +78,7 @@ const createMeetingRoutes = (meetingController, audioStorageProvider) => {
    *       404:
    *         description: Project not found
    */
-  router.post('/', uploadAudio, validateCreateMeeting, meetingController.create);
+  router.post('/', requireProjectOwnership, uploadAudio, validateCreateMeeting, meetingController.create);
 
   /**
    * @swagger
@@ -118,7 +119,7 @@ const createMeetingRoutes = (meetingController, audioStorageProvider) => {
    *       404:
    *         description: Project not found
    */
-  router.get('/', meetingController.list);
+  router.get('/', requireProjectOwnership, meetingController.list);
 
   /**
    * @swagger
@@ -149,7 +150,7 @@ const createMeetingRoutes = (meetingController, audioStorageProvider) => {
    *       404:
    *         description: Meeting not found
    */
-  router.get('/:id', meetingController.getById);
+  router.get('/:id', requireMeetingOwnership, meetingController.getById);
 
   /**
    * @swagger
@@ -193,7 +194,7 @@ const createMeetingRoutes = (meetingController, audioStorageProvider) => {
    *       404:
    *         description: Meeting not found
    */
-  router.put('/:id', validateUpdateMeeting, meetingController.update);
+  router.put('/:id', requireMeetingOwnership, validateUpdateMeeting, meetingController.update);
 
   /**
    * @swagger
@@ -224,7 +225,7 @@ const createMeetingRoutes = (meetingController, audioStorageProvider) => {
    *       404:
    *         description: Meeting not found
    */
-  router.delete('/:id', meetingController.delete);
+  router.delete('/:id', requireMeetingOwnership, meetingController.delete);
 
   /**
    * @swagger
@@ -257,7 +258,7 @@ const createMeetingRoutes = (meetingController, audioStorageProvider) => {
    *       404:
    *         description: Meeting not found
    */
-  router.post('/:id/transcribe', meetingController.startTranscription);
+  router.post('/:id/transcribe', requireMeetingOwnership, meetingController.startTranscription);
 
   /**
    * @swagger
@@ -301,7 +302,7 @@ const createMeetingRoutes = (meetingController, audioStorageProvider) => {
    *       404:
    *         description: Meeting not found
    */
-  router.get('/:id/download', meetingController.downloadAudio);
+  router.get('/:id/download', requireMeetingOwnership, meetingController.downloadAudio);
 
   /**
    * @swagger
@@ -332,7 +333,7 @@ const createMeetingRoutes = (meetingController, audioStorageProvider) => {
    *       404:
    *         description: Meeting not found
    */
-  router.get('/:id/status', meetingController.getStatus);
+  router.get('/:id/status', requireMeetingOwnership, meetingController.getStatus);
 
   /**
    * @swagger
@@ -403,7 +404,7 @@ const createMeetingRoutes = (meetingController, audioStorageProvider) => {
    *       404:
    *         description: Meeting not found
    */
-  router.post('/:id/summary/stream', meetingController.generateSummaryStream);
+  router.post('/:id/summary/stream', requireMeetingOwnership, meetingController.generateSummaryStream);
 
   return router;
 };

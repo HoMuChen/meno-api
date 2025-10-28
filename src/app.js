@@ -98,7 +98,7 @@ const createApp = () => {
   const authController = new AuthController(authService, logger);
   const projectController = new ProjectController(projectService, logger);
   const meetingController = new MeetingController(meetingService, logger);
-  const transcriptionController = new TranscriptionController(transcriptionDataService, logger, authorizationService);
+  const transcriptionController = new TranscriptionController(transcriptionDataService, logger);
 
   // Basic middleware
   app.use(express.json());

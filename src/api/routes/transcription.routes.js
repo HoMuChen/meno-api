@@ -4,6 +4,7 @@
  */
 const express = require('express');
 const { authenticate } = require('../middleware/auth.middleware');
+const { requireMeetingOwnershipForTranscription } = require('../middleware/authorization.middleware');
 const {
   validateUpdateTranscription,
   validateSearchQuery,
@@ -20,8 +21,9 @@ const createTranscriptionRoutes = (transcriptionController) => {
    *   description: Transcription management endpoints
    */
 
-  // All transcription routes require authentication
+  // All transcription routes require authentication and meeting ownership
   router.use(authenticate);
+  router.use(requireMeetingOwnershipForTranscription);
 
   /**
    * @swagger
