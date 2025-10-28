@@ -45,162 +45,199 @@ class MeetingService extends BaseService {
 
     try {
       // Verify user owns the project
-      this.logger.info('Meeting service: verifying project ownership', {
-        projectId,
-        userId
-      });
-
       const ownsProject = await this.projectService.verifyOwnership(projectId, userId);
       if (!ownsProject) {
-        this.logger.error('Meeting service: project ownership verification failed', {
-          projectId,
-          userId
-        });
         throw new Error('Project not found or access denied');
       }
 
-      this.logger.info('Meeting service: project ownership verified', {
-        projectId,
-        userId
-      });
+      // Extract audio duration using hybrid approach
+      const audioDuration = await this._extractAudioDuration(meetingData, audioFile);
 
-      // Get audio duration using hybrid approach:
-      // 1. Client-provided duration (fastest, best UX)
-      // 2. Local file path extraction (for local storage)
-      // 3. Storage URI extraction with temp download (for GCS)
-      let audioDuration = null;
+      // Create and save meeting document
+      const meeting = await this._createMeetingDocument(projectId, meetingData, audioFile, audioDuration);
 
-      // Priority 1: If duration is provided in request body, use it directly
-      if (meetingData.duration !== undefined && meetingData.duration !== null) {
-        audioDuration = parseFloat(meetingData.duration);
-        this.logger.info('Using client-provided audio duration', {
-          duration: audioDuration,
-          audioFile: audioFile.originalname
-        });
-      }
-      // Priority 2: Try to extract from local file path (for local storage)
-      else if (audioFile.path) {
-        try {
-          audioDuration = await getAudioDuration(audioFile.path);
-          this.logger.info('Audio duration extracted from local file path', {
-            duration: audioDuration,
-            audioFile: audioFile.originalname,
-            path: audioFile.path
-          });
-        } catch (error) {
-          this.logger.warn('Failed to extract audio duration from local path', {
-            error: error.message,
-            audioFile: audioFile.originalname,
-            path: audioFile.path
-          });
-          // Continue without duration - it will default to null
-        }
-      }
-      // Priority 3: Try to extract from storage URI (for GCS - downloads to temp)
-      else if (audioFile.uri) {
-        try {
-          this.logger.info('Attempting to extract audio duration from storage URI', {
-            uri: audioFile.uri,
-            audioFile: audioFile.originalname
-          });
-
-          audioDuration = await getAudioDurationFromStorage(
-            audioFile.uri,
-            this.audioStorageProvider
-          );
-
-          this.logger.info('Audio duration extracted from storage URI', {
-            duration: audioDuration,
-            audioFile: audioFile.originalname,
-            uri: audioFile.uri
-          });
-        } catch (error) {
-          this.logger.warn('Failed to extract audio duration from storage URI', {
-            error: error.message,
-            audioFile: audioFile.originalname,
-            uri: audioFile.uri
-          });
-          // Continue without duration - it will default to null
-        }
-      } else {
-        this.logger.warn('Audio duration not available: not provided by client and no path/URI available', {
-          audioFile: audioFile.originalname
-        });
-      }
-
-      // File is already uploaded by streaming middleware
-      // audioFile.uri contains the storage URI
-      this.logger.info('Meeting service: using uploaded file from streaming middleware', {
-        uri: audioFile.uri,
-        size: audioFile.size
-      });
-
-      // Create meeting with storage URI
-      const meeting = new Meeting({
-        title: meetingData.title,
-        projectId,
-        audioFile: audioFile.uri, // URI from streaming upload
-        duration: audioDuration, // Set extracted or provided duration
-        recordingType: meetingData.recordingType || 'upload',
-        transcriptionStatus: 'pending',
-        transcriptionProgress: 0,
-        metadata: {
-          fileSize: audioFile.size,
-          mimeType: audioFile.mimetype,
-          originalName: audioFile.originalname
-        }
-      });
-
-      await meeting.save();
-
-      this.logSuccess('Meeting created', {
-        meetingId: meeting._id,
-        projectId,
-        userId,
-        audioFileUri: audioFile.uri
-      });
-
-      // Increment user's usage counter (if duration available)
-      if (audioDuration && audioDuration > 0) {
-        try {
-          const user = await User.findById(userId).populate('tier');
-          if (user) {
-            user.addUsage(audioDuration);
-            await user.save();
-
-            this.logger.info('User usage incremented', {
-              userId,
-              duration: audioDuration,
-              newTotal: user.currentMonthUsage.duration
-            });
-          }
-        } catch (usageError) {
-          // Log but don't fail the meeting creation
-          this.logger.warn('Failed to increment usage', {
-            error: usageError.message,
-            userId,
-            meetingId: meeting._id
-          });
-        }
-      }
+      // Update user's usage counter
+      await this._updateUserUsage(userId, audioDuration, meeting._id);
 
       // Auto-start transcription if configured
-      if (process.env.AUTO_START_TRANSCRIPTION === 'true') {
-        this.logger.info('Auto-starting transcription', { meetingId: meeting._id });
-
-        // Fire and forget - process transcription asynchronously
-        this._processTranscription(meeting._id, audioFile.uri).catch(error => {
-          this.logger.error('Auto-transcription failed', {
-            error: error.message,
-            meetingId: meeting._id
-          });
-        });
-      }
+      this._maybeAutoStartTranscription(meeting._id, audioFile.uri);
 
       return meeting.toSafeObject();
     } catch (error) {
       this.logAndThrow(error, 'Create meeting', { projectId, userId });
     }
+  }
+
+  /**
+   * Extract audio duration using hybrid approach
+   * Priority: 1. Client-provided 2. Local file path 3. Storage URI
+   * @param {Object} meetingData - Meeting data (may contain duration)
+   * @param {Object} audioFile - Uploaded audio file info
+   * @returns {Promise<number|null>} Audio duration in seconds or null
+   * @private
+   */
+  async _extractAudioDuration(meetingData, audioFile) {
+    // Priority 1: If duration is provided in request body, use it directly
+    if (meetingData.duration !== undefined && meetingData.duration !== null) {
+      const duration = parseFloat(meetingData.duration);
+      this.logger.info('Using client-provided audio duration', {
+        duration,
+        audioFile: audioFile.originalname
+      });
+      return duration;
+    }
+
+    // Priority 2: Try to extract from local file path (for local storage)
+    if (audioFile.path) {
+      try {
+        const duration = await getAudioDuration(audioFile.path);
+        this.logger.info('Audio duration extracted from local file path', {
+          duration,
+          audioFile: audioFile.originalname,
+          path: audioFile.path
+        });
+        return duration;
+      } catch (error) {
+        this.logger.warn('Failed to extract audio duration from local path', {
+          error: error.message,
+          audioFile: audioFile.originalname,
+          path: audioFile.path
+        });
+      }
+    }
+
+    // Priority 3: Try to extract from storage URI (for GCS - downloads to temp)
+    if (audioFile.uri) {
+      try {
+        this.logger.info('Attempting to extract audio duration from storage URI', {
+          uri: audioFile.uri,
+          audioFile: audioFile.originalname
+        });
+
+        const duration = await getAudioDurationFromStorage(
+          audioFile.uri,
+          this.audioStorageProvider
+        );
+
+        this.logger.info('Audio duration extracted from storage URI', {
+          duration,
+          audioFile: audioFile.originalname,
+          uri: audioFile.uri
+        });
+        return duration;
+      } catch (error) {
+        this.logger.warn('Failed to extract audio duration from storage URI', {
+          error: error.message,
+          audioFile: audioFile.originalname,
+          uri: audioFile.uri
+        });
+      }
+    }
+
+    this.logger.warn('Audio duration not available: not provided by client and no path/URI available', {
+      audioFile: audioFile.originalname
+    });
+    return null;
+  }
+
+  /**
+   * Create and save meeting document
+   * @param {string} projectId - Project ID
+   * @param {Object} meetingData - Meeting data
+   * @param {Object} audioFile - Uploaded audio file info
+   * @param {number|null} audioDuration - Audio duration in seconds
+   * @returns {Promise<Object>} Created meeting document
+   * @private
+   */
+  async _createMeetingDocument(projectId, meetingData, audioFile, audioDuration) {
+    this.logger.info('Creating meeting document', {
+      uri: audioFile.uri,
+      size: audioFile.size,
+      duration: audioDuration
+    });
+
+    const meeting = new Meeting({
+      title: meetingData.title,
+      projectId,
+      audioFile: audioFile.uri,
+      duration: audioDuration,
+      recordingType: meetingData.recordingType || 'upload',
+      transcriptionStatus: 'pending',
+      transcriptionProgress: 0,
+      metadata: {
+        fileSize: audioFile.size,
+        mimeType: audioFile.mimetype,
+        originalName: audioFile.originalname
+      }
+    });
+
+    await meeting.save();
+
+    this.logSuccess('Meeting created', {
+      meetingId: meeting._id,
+      projectId,
+      audioFileUri: audioFile.uri
+    });
+
+    return meeting;
+  }
+
+  /**
+   * Update user's usage counter with audio duration
+   * @param {string} userId - User ID
+   * @param {number|null} audioDuration - Audio duration in seconds
+   * @param {string} meetingId - Meeting ID (for logging)
+   * @returns {Promise<void>}
+   * @private
+   */
+  async _updateUserUsage(userId, audioDuration, meetingId) {
+    if (!audioDuration || audioDuration <= 0) {
+      return;
+    }
+
+    try {
+      const user = await User.findById(userId).populate('tier');
+      if (user) {
+        user.addUsage(audioDuration);
+        await user.save();
+
+        this.logger.info('User usage incremented', {
+          userId,
+          duration: audioDuration,
+          newTotal: user.currentMonthUsage.duration
+        });
+      }
+    } catch (usageError) {
+      // Log but don't fail the meeting creation
+      this.logger.warn('Failed to increment usage', {
+        error: usageError.message,
+        userId,
+        meetingId
+      });
+    }
+  }
+
+  /**
+   * Auto-start transcription if configured
+   * @param {string} meetingId - Meeting ID
+   * @param {string} audioFileUri - Audio file storage URI
+   * @returns {void}
+   * @private
+   */
+  _maybeAutoStartTranscription(meetingId, audioFileUri) {
+    if (process.env.AUTO_START_TRANSCRIPTION !== 'true') {
+      return;
+    }
+
+    this.logger.info('Auto-starting transcription', { meetingId });
+
+    // Fire and forget - process transcription asynchronously
+    this._processTranscription(meetingId, audioFileUri).catch(error => {
+      this.logger.error('Auto-transcription failed', {
+        error: error.message,
+        meetingId
+      });
+    });
   }
 
   /**
