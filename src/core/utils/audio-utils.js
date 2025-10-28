@@ -1,6 +1,14 @@
 /**
  * Audio Utilities
  * Helper functions for audio file metadata extraction using ffmpeg
+ *
+ * Supported Audio Formats:
+ * - MP3 (audio/mpeg, audio/mp3) - MPEG Audio Layer III
+ * - M4A/AAC (audio/mp4, audio/x-m4a, audio/m4a, audio/aac)
+ * - WAV (audio/wav, audio/x-wav, audio/wave)
+ * - WebM (audio/webm, video/webm)
+ * - OGG (audio/ogg, audio/vorbis)
+ * - FLAC (audio/flac, audio/x-flac)
  */
 const ffmpeg = require('fluent-ffmpeg');
 const fs = require('fs');
@@ -88,7 +96,141 @@ async function getAudioMetadata(filePath) {
   });
 }
 
+/**
+ * Extract audio duration from storage URI or file path
+ * Supports both local file paths and storage URIs (gcs://, local://)
+ *
+ * Works with all supported audio formats including:
+ * - MP3 (.mp3) - Full support via ffprobe
+ * - M4A/AAC (.m4a, .aac)
+ * - WAV (.wav)
+ * - WebM (.webm)
+ * - OGG (.ogg)
+ * - FLAC (.flac)
+ *
+ * @param {string} filePathOrUri - Local file path or storage URI
+ * @param {Object} storageProvider - Storage provider instance (optional, required for remote URIs)
+ * @returns {Promise<number|null>} Duration in seconds or null if extraction fails
+ */
+async function getAudioDurationFromStorage(filePathOrUri, storageProvider = null) {
+  const { withTempFile } = require('./temp-file-manager');
+
+  // If it's a local file path, use existing method
+  if (!filePathOrUri.includes('://')) {
+    return getAudioDuration(filePathOrUri);
+  }
+
+  // Parse storage URI
+  const uriMatch = filePathOrUri.match(/^(\w+):\/\//);
+  if (!uriMatch) {
+    throw new Error(`Invalid storage URI format: ${filePathOrUri}`);
+  }
+
+  const protocol = uriMatch[1];
+
+  // Handle local:// URIs by extracting the local path
+  if (protocol === 'local') {
+    // local://bucket/path -> extract path after bucket
+    const pathMatch = filePathOrUri.match(/^local:\/\/[^/]+\/(.+)$/);
+    if (pathMatch) {
+      const relativePath = pathMatch[1];
+      // Construct full local path
+      const basePath = process.env.LOCAL_STORAGE_PATH || './storage';
+      const localPath = require('path').join(basePath, relativePath);
+      return getAudioDuration(localPath);
+    }
+  }
+
+  // Handle gcs:// URIs - download to temp and extract
+  if (protocol === 'gcs') {
+    if (!storageProvider || !storageProvider.downloadToTemp) {
+      throw new Error('Storage provider with downloadToTemp method is required for GCS URIs');
+    }
+
+    let tempFilePath = null;
+
+    try {
+      // Download to temp location
+      tempFilePath = await storageProvider.downloadToTemp(filePathOrUri);
+
+      // Extract duration using temp file
+      const duration = await withTempFile(tempFilePath, async (path) => {
+        return getAudioDuration(path);
+      });
+
+      return duration;
+    } catch (error) {
+      // If temp file exists, it will be cleaned up by withTempFile
+      throw new Error(`Failed to extract duration from GCS: ${error.message}`);
+    }
+  }
+
+  throw new Error(`Unsupported storage protocol: ${protocol}`);
+}
+
+/**
+ * Extract comprehensive audio metadata from storage URI or file path
+ * Supports both local file paths and storage URIs (gcs://, local://)
+ * @param {string} filePathOrUri - Local file path or storage URI
+ * @param {Object} storageProvider - Storage provider instance (optional, required for remote URIs)
+ * @returns {Promise<Object>} Audio metadata object
+ */
+async function getAudioMetadataFromStorage(filePathOrUri, storageProvider = null) {
+  const { withTempFile } = require('./temp-file-manager');
+
+  // If it's a local file path, use existing method
+  if (!filePathOrUri.includes('://')) {
+    return getAudioMetadata(filePathOrUri);
+  }
+
+  // Parse storage URI
+  const uriMatch = filePathOrUri.match(/^(\w+):\/\//);
+  if (!uriMatch) {
+    throw new Error(`Invalid storage URI format: ${filePathOrUri}`);
+  }
+
+  const protocol = uriMatch[1];
+
+  // Handle local:// URIs by extracting the local path
+  if (protocol === 'local') {
+    const pathMatch = filePathOrUri.match(/^local:\/\/[^/]+\/(.+)$/);
+    if (pathMatch) {
+      const relativePath = pathMatch[1];
+      const basePath = process.env.LOCAL_STORAGE_PATH || './storage';
+      const localPath = require('path').join(basePath, relativePath);
+      return getAudioMetadata(localPath);
+    }
+  }
+
+  // Handle gcs:// URIs - download to temp and extract
+  if (protocol === 'gcs') {
+    if (!storageProvider || !storageProvider.downloadToTemp) {
+      throw new Error('Storage provider with downloadToTemp method is required for GCS URIs');
+    }
+
+    let tempFilePath = null;
+
+    try {
+      // Download to temp location
+      tempFilePath = await storageProvider.downloadToTemp(filePathOrUri);
+
+      // Extract metadata using temp file
+      const metadata = await withTempFile(tempFilePath, async (path) => {
+        return getAudioMetadata(path);
+      });
+
+      return metadata;
+    } catch (error) {
+      throw new Error(`Failed to extract metadata from GCS: ${error.message}`);
+    }
+  }
+
+  throw new Error(`Unsupported storage protocol: ${protocol}`);
+}
+
 module.exports = {
   getAudioDuration,
-  getAudioMetadata
+  getAudioMetadata,
+  getAudioDurationFromStorage,
+  getAudioMetadataFromStorage
 };

@@ -8,7 +8,7 @@ const User = require('../../models/user.model');
 const mongoose = require('mongoose');
 const path = require('path');
 const BaseService = require('./base.service');
-const { getAudioDuration } = require('../utils/audio-utils');
+const { getAudioDuration, getAudioDurationFromStorage } = require('../utils/audio-utils');
 
 class MeetingService extends BaseService {
   constructor(logger, fileService, projectService, transcriptionService, transcriptionDataService, audioStorageProvider) {
@@ -63,33 +63,66 @@ class MeetingService extends BaseService {
         userId
       });
 
-      // Get audio duration from request body or extract from file (if path available)
+      // Get audio duration using hybrid approach:
+      // 1. Client-provided duration (fastest, best UX)
+      // 2. Local file path extraction (for local storage)
+      // 3. Storage URI extraction with temp download (for GCS)
       let audioDuration = null;
 
-      // If duration is provided in request body, use it directly
+      // Priority 1: If duration is provided in request body, use it directly
       if (meetingData.duration !== undefined && meetingData.duration !== null) {
         audioDuration = parseFloat(meetingData.duration);
-        this.logger.info('Using provided audio duration', {
+        this.logger.info('Using client-provided audio duration', {
           duration: audioDuration,
           audioFile: audioFile.originalname
         });
-      } else if (audioFile.path) {
-        // Otherwise, try to extract duration from file (only if path exists - for local storage)
+      }
+      // Priority 2: Try to extract from local file path (for local storage)
+      else if (audioFile.path) {
         try {
           audioDuration = await getAudioDuration(audioFile.path);
-          this.logger.info('Audio duration extracted from file', {
+          this.logger.info('Audio duration extracted from local file path', {
             duration: audioDuration,
-            audioFile: audioFile.originalname
+            audioFile: audioFile.originalname,
+            path: audioFile.path
           });
         } catch (error) {
-          this.logger.warn('Failed to extract audio duration', {
+          this.logger.warn('Failed to extract audio duration from local path', {
             error: error.message,
+            audioFile: audioFile.originalname,
+            path: audioFile.path
+          });
+          // Continue without duration - it will default to null
+        }
+      }
+      // Priority 3: Try to extract from storage URI (for GCS - downloads to temp)
+      else if (audioFile.uri) {
+        try {
+          this.logger.info('Attempting to extract audio duration from storage URI', {
+            uri: audioFile.uri,
             audioFile: audioFile.originalname
+          });
+
+          audioDuration = await getAudioDurationFromStorage(
+            audioFile.uri,
+            this.audioStorageProvider
+          );
+
+          this.logger.info('Audio duration extracted from storage URI', {
+            duration: audioDuration,
+            audioFile: audioFile.originalname,
+            uri: audioFile.uri
+          });
+        } catch (error) {
+          this.logger.warn('Failed to extract audio duration from storage URI', {
+            error: error.message,
+            audioFile: audioFile.originalname,
+            uri: audioFile.uri
           });
           // Continue without duration - it will default to null
         }
       } else {
-        this.logger.warn('Audio duration not provided and file path not available (streaming upload)', {
+        this.logger.warn('Audio duration not available: not provided by client and no path/URI available', {
           audioFile: audioFile.originalname
         });
       }

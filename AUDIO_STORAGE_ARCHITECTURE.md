@@ -348,6 +348,52 @@ file downloaded-audio.mp3
 # Should show: Audio file with MPEG ADTS, layer III...
 ```
 
+## Supported Audio Formats
+
+The system supports the following audio formats for upload and processing:
+
+### Fully Supported Formats
+
+| Format | Extension | MIME Types | Duration Extraction | Notes |
+|--------|-----------|------------|---------------------|-------|
+| **MP3** | `.mp3` | `audio/mpeg`, `audio/mp3` | ✅ Full support | Most common format, works on all storage providers |
+| **M4A/AAC** | `.m4a`, `.aac` | `audio/mp4`, `audio/x-m4a`, `audio/m4a`, `audio/aac` | ✅ Full support | Apple/iOS native format |
+| **WAV** | `.wav` | `audio/wav`, `audio/x-wav`, `audio/wave` | ✅ Full support | Uncompressed, larger file size |
+| **WebM** | `.webm` | `audio/webm`, `video/webm` | ✅ Full support | Modern web format |
+| **OGG** | `.ogg` | `audio/ogg`, `audio/vorbis` | ✅ Full support | Open source format |
+| **FLAC** | `.flac` | `audio/flac`, `audio/x-flac` | ✅ Full support | Lossless compression |
+
+### Audio Duration Extraction
+
+The system automatically extracts audio duration using a **3-tier hybrid approach**:
+
+#### Priority 1: Client-Provided Duration (Recommended)
+```javascript
+// Frontend extracts duration before upload
+const audioElement = new Audio(URL.createObjectURL(file));
+audioElement.onloadedmetadata = () => {
+  formData.append('duration', audioElement.duration);
+  // Upload with duration
+};
+```
+**Benefits**: Fastest, no server overhead, works with all storage types
+
+#### Priority 2: Local Storage Path Extraction
+- For local storage: Uses file path directly with ffprobe
+- **Performance**: Fast (~100-500ms)
+- **Format Support**: All formats including MP3
+
+#### Priority 3: GCS Storage URI Extraction
+- For GCS storage: Downloads to temp, extracts, auto-cleanup
+- **Performance**: Slower (~1-2 seconds due to download)
+- **Format Support**: All formats including MP3
+
+**Technical Details**:
+- Uses **ffprobe** for metadata extraction (part of ffmpeg)
+- Handles MP3 ID3 tags, M4A atoms, and all standard audio metadata
+- Automatic temp file cleanup for GCS downloads
+- Graceful fallback if extraction fails (duration = null)
+
 ## Benefits Summary
 
 ✅ **Cloud-Ready**: Easy migration to GCS with just configuration change
@@ -357,6 +403,7 @@ file downloaded-audio.mp3
 ✅ **Scalable**: Support for multiple storage providers
 ✅ **Future-Proof**: Add S3, Azure, or other providers easily
 ✅ **Clean Architecture**: Separation of concerns between storage and business logic
+✅ **MP3 & All Major Formats**: Full support for MP3, M4A, WAV, WebM, OGG, FLAC
 
 ## Future Enhancements
 

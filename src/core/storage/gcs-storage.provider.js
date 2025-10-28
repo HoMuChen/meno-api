@@ -302,6 +302,66 @@ class GCSStorageProvider extends StorageProvider {
   }
 
   /**
+   * Download file from GCS to temporary location for processing
+   * @param {string} uri - Storage URI (gcs://bucket/path)
+   * @param {string} tempDir - Temporary directory path (default: /tmp)
+   * @returns {Promise<string>} Path to temporary file
+   */
+  async downloadToTemp(uri, tempDir = '/tmp') {
+    const fs = require('fs');
+    const path = require('path');
+    const os = require('os');
+
+    await this._initializeClient();
+
+    // Use system temp directory if /tmp doesn't exist (Windows compatibility)
+    const actualTempDir = fs.existsSync(tempDir) ? tempDir : os.tmpdir();
+
+    try {
+      const { bucket: bucketName, path: filePath } = this.parseUri(uri);
+      const bucket = this.storageClient.bucket(bucketName);
+      const file = bucket.file(filePath);
+
+      // Generate unique temp file path
+      const ext = path.extname(filePath);
+      const timestamp = Date.now();
+      const random = Math.random().toString(36).substring(7);
+      const tempFileName = `gcs-temp-${timestamp}-${random}${ext}`;
+      const tempFilePath = path.join(actualTempDir, tempFileName);
+
+      this.logger.info('Downloading GCS file to temp location', {
+        uri,
+        tempFilePath
+      });
+
+      // Download to temp file
+      await file.download({ destination: tempFilePath });
+
+      // Verify file was created
+      if (!fs.existsSync(tempFilePath)) {
+        throw new Error('Temp file was not created');
+      }
+
+      const stats = fs.statSync(tempFilePath);
+
+      this.logger.info('GCS file downloaded to temp location', {
+        uri,
+        tempFilePath,
+        size: stats.size
+      });
+
+      return tempFilePath;
+    } catch (error) {
+      this.logger.error('GCS download to temp failed', {
+        error: error.message,
+        uri,
+        tempDir: actualTempDir
+      });
+      throw new Error(`Failed to download file to temp: ${error.message}`);
+    }
+  }
+
+  /**
    * Get signed URL for temporary file access
    * @param {string} uri - Storage URI
    * @param {number} expiresIn - URL expiration time in seconds

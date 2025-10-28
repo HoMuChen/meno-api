@@ -768,7 +768,14 @@ paths:
                 duration:
                   type: number
                   format: float
-                  description: Audio duration in seconds (optional, calculated from file if not provided)
+                  description: |
+                    Audio duration in seconds (optional).
+
+                    If not provided, server will attempt to extract duration automatically:
+                    - For local storage: extracts from file path (fast)
+                    - For GCS storage: downloads to temp and extracts (slower, ~1-2s latency)
+
+                    **Recommended**: Extract duration on client side before upload for best performance.
                   example: 125.5
       responses:
         '201':
