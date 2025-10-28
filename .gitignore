@@ -15,8 +15,8 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# Storage
-storage/
+# Storage (data files only, not src/core/storage code)
+/storage/
 
 # OS files
 .DS_Store
