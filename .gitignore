@@ -8,6 +8,12 @@ yarn.lock
 .env.local
 .env.*.local
 
+# Google Cloud credentials
+config/gcs-credentials.json
+config/*-credentials.json
+*-service-account-key.json
+gcs-*.json
+
 # Logs
 logs/
 *.log
