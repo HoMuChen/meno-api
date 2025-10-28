@@ -16,7 +16,7 @@ const { errorHandler, notFound } = require('./api/middleware/errorHandler');
 const requestLogger = require('./api/middleware/requestLogger');
 
 // Import services and controllers
-const { UserService, FileService, AuthService } = require('./core/services');
+const { UserService, FileService, AuthService, AuthorizationService } = require('./core/services');
 const ProjectService = require('./core/services/project.service');
 const MeetingService = require('./core/services/meeting.service');
 const TranscriptionDataService = require('./core/services/transcription-data.service');
@@ -66,6 +66,7 @@ const createApp = () => {
   const userService = new UserService(logger, storageProvider);
   const fileService = new FileService(logger, storageProvider);
   const authService = new AuthService(logger);
+  const authorizationService = new AuthorizationService(logger);
   const projectService = new ProjectService(logger);
   const transcriptionDataService = new TranscriptionDataService(logger);
 
@@ -76,7 +77,8 @@ const createApp = () => {
     projectService,
     null, // transcriptionService - will be set after factory initialization
     transcriptionDataService,
-    audioStorageProvider
+    audioStorageProvider,
+    authorizationService
   );
 
   // Initialize transcription service using factory
@@ -96,7 +98,7 @@ const createApp = () => {
   const authController = new AuthController(authService, logger);
   const projectController = new ProjectController(projectService, logger);
   const meetingController = new MeetingController(meetingService, logger);
-  const transcriptionController = new TranscriptionController(transcriptionDataService, logger);
+  const transcriptionController = new TranscriptionController(transcriptionDataService, logger, authorizationService);
 
   // Basic middleware
   app.use(express.json());

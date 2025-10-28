@@ -11,13 +11,14 @@ const BaseService = require('./base.service');
 const { getAudioDuration, getAudioDurationFromStorage } = require('../utils/audio-utils');
 
 class MeetingService extends BaseService {
-  constructor(logger, fileService, projectService, transcriptionService, transcriptionDataService, audioStorageProvider) {
+  constructor(logger, fileService, projectService, transcriptionService, transcriptionDataService, audioStorageProvider, authorizationService) {
     super(logger);
     this.fileService = fileService;
     this.projectService = projectService;
     this.transcriptionService = transcriptionService;
     this.transcriptionDataService = transcriptionDataService;
     this.audioStorageProvider = audioStorageProvider;
+    this.authorizationService = authorizationService;
   }
 
   /**
@@ -296,16 +297,7 @@ class MeetingService extends BaseService {
       }
 
       // Verify ownership through project
-      this.logger.debug('Verifying meeting ownership', {
-        meetingId,
-        requestUserId: userId,
-        projectUserId: meeting.projectId.userId.toString(),
-        projectId: meeting.projectId._id.toString()
-      });
-
-      if (meeting.projectId.userId.toString() !== userId.toString()) {
-        throw new Error('Access denied');
-      }
+      this.authorizationService.verifyMeetingOwnership(meeting, userId);
 
       // Get transcription count
       const transcriptionsCount = await this.transcriptionDataService.getTranscriptionCount(meetingId);
@@ -340,9 +332,7 @@ class MeetingService extends BaseService {
       }
 
       // Verify ownership
-      if (meeting.projectId.userId.toString() !== userId.toString()) {
-        throw new Error('Access denied');
-      }
+      this.authorizationService.verifyMeetingOwnership(meeting, userId);
 
       // Only allow updating title
       if (updates.title !== undefined) {
@@ -377,9 +367,7 @@ class MeetingService extends BaseService {
       }
 
       // Verify ownership
-      if (meeting.projectId.userId.toString() !== userId.toString()) {
-        throw new Error('Access denied');
-      }
+      this.authorizationService.verifyMeetingOwnership(meeting, userId);
 
       // Delete audio file from storage
       try {
@@ -425,9 +413,7 @@ class MeetingService extends BaseService {
       }
 
       // Verify ownership
-      if (meeting.projectId.userId.toString() !== userId.toString()) {
-        throw new Error('Access denied');
-      }
+      this.authorizationService.verifyMeetingOwnership(meeting, userId);
 
       // Check if already transcribed or processing
       if (meeting.transcriptionStatus === 'completed') {
@@ -640,16 +626,7 @@ class MeetingService extends BaseService {
       }
 
       // Verify ownership
-      this.logger.debug('Verifying audio download ownership', {
-        meetingId,
-        requestUserId: userId,
-        projectUserId: meeting.projectId.userId.toString(),
-        projectId: meeting.projectId._id.toString()
-      });
-
-      if (meeting.projectId.userId.toString() !== userId.toString()) {
-        throw new Error('Access denied');
-      }
+      this.authorizationService.verifyMeetingOwnership(meeting, userId);
 
       // Download file from storage
       const fileData = await this.audioStorageProvider.download(meeting.audioFile);
@@ -686,9 +663,7 @@ class MeetingService extends BaseService {
       }
 
       // Verify ownership
-      if (meeting.projectId.userId.toString() !== userId.toString()) {
-        throw new Error('Access denied');
-      }
+      this.authorizationService.verifyMeetingOwnership(meeting, userId);
 
       const transcriptionsCount = await this.transcriptionDataService.getTranscriptionCount(meetingId);
 
@@ -817,9 +792,7 @@ class MeetingService extends BaseService {
       }
 
       // Verify ownership
-      if (meeting.projectId.userId.toString() !== userId.toString()) {
-        throw new Error('Access denied');
-      }
+      this.authorizationService.verifyMeetingOwnership(meeting, userId);
 
       // Check if transcription is completed
       if (meeting.transcriptionStatus !== 'completed') {
@@ -853,9 +826,7 @@ class MeetingService extends BaseService {
       }
 
       // Verify ownership
-      if (meeting.projectId.userId.toString() !== userId.toString()) {
-        throw new Error('Access denied');
-      }
+      this.authorizationService.verifyMeetingOwnership(meeting, userId);
 
       // Update meeting with summary
       meeting.summary = summary;

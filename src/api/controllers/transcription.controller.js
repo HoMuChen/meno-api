@@ -7,9 +7,10 @@ const Meeting = require('../../models/meeting.model');
 const { NotFoundError, ForbiddenError, BadRequestError } = require('../../utils/errors');
 
 class TranscriptionController extends BaseController {
-  constructor(transcriptionDataService, logger) {
+  constructor(transcriptionDataService, logger, authorizationService) {
     super(transcriptionDataService, logger);
     this.transcriptionDataService = transcriptionDataService;
+    this.authorizationService = authorizationService;
   }
 
     /**
@@ -22,12 +23,7 @@ class TranscriptionController extends BaseController {
 
     // Verify user has access to this meeting
     const meeting = await Meeting.findById(meetingId).populate('projectId');
-    if (!meeting) {
-      throw new NotFoundError('Meeting not found');
-    }
-    if (meeting.projectId.userId.toString() !== userId.toString()) {
-      throw new ForbiddenError('Access denied');
-    }
+    this.authorizationService.verifyMeetingOwnership(meeting, userId);
 
     const result = await this.transcriptionDataService.getTranscriptions(meetingId, {
       page,
@@ -47,9 +43,7 @@ class TranscriptionController extends BaseController {
 
     // Verify ownership through meeting → project
     const meeting = await Meeting.findById(transcription.meetingId).populate('projectId');
-    if (!meeting || meeting.projectId.userId.toString() !== userId.toString()) {
-      throw new ForbiddenError('Access denied');
-    }
+    this.authorizationService.verifyMeetingOwnership(meeting, userId);
 
     return this.sendSuccess(res, transcription);
   });
@@ -65,9 +59,7 @@ class TranscriptionController extends BaseController {
 
     // Verify ownership through meeting → project
     const meeting = await Meeting.findById(transcription.meetingId).populate('projectId');
-    if (!meeting || meeting.projectId.userId.toString() !== userId.toString()) {
-      throw new ForbiddenError('Access denied');
-    }
+    this.authorizationService.verifyMeetingOwnership(meeting, userId);
 
     const updatedTranscription = await this.transcriptionDataService.updateTranscription(req.params.id, req.body);
 
@@ -88,12 +80,7 @@ class TranscriptionController extends BaseController {
 
     // Verify user has access to this meeting
     const meeting = await Meeting.findById(meetingId).populate('projectId');
-    if (!meeting) {
-      throw new NotFoundError('Meeting not found');
-    }
-    if (meeting.projectId.userId.toString() !== userId.toString()) {
-      throw new ForbiddenError('Access denied');
-    }
+    this.authorizationService.verifyMeetingOwnership(meeting, userId);
 
     const result = await this.transcriptionDataService.searchTranscriptions(meetingId, q, {
       page,
@@ -113,12 +100,7 @@ class TranscriptionController extends BaseController {
 
     // Verify user has access to this meeting
     const meeting = await Meeting.findById(meetingId).populate('projectId');
-    if (!meeting) {
-      throw new NotFoundError('Meeting not found');
-    }
-    if (meeting.projectId.userId.toString() !== userId.toString()) {
-      throw new ForbiddenError('Access denied');
-    }
+    this.authorizationService.verifyMeetingOwnership(meeting, userId);
 
     const result = await this.transcriptionDataService.getTranscriptionsBySpeaker(meetingId, speaker, {
       page,
@@ -138,12 +120,7 @@ class TranscriptionController extends BaseController {
 
     // Verify user has access to this meeting
     const meeting = await Meeting.findById(meetingId).populate('projectId');
-    if (!meeting) {
-      throw new NotFoundError('Meeting not found');
-    }
-    if (meeting.projectId.userId.toString() !== userId.toString()) {
-      throw new ForbiddenError('Access denied');
-    }
+    this.authorizationService.verifyMeetingOwnership(meeting, userId);
 
     // Build status response
     const statusData = {

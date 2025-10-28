@@ -193,6 +193,14 @@ meetingSchema.methods.toSafeObject = function () {
   return obj;
 };
 
+// Instance method to check ownership
+meetingSchema.methods.isOwnedBy = function (userId) {
+  if (!this.projectId || !this.projectId.userId) {
+    return false;
+  }
+  return this.projectId.userId.toString() === userId.toString();
+};
+
 // Instance method to update transcription progress
 meetingSchema.methods.updateTranscriptionProgress = async function (status, progress) {
   this.transcriptionStatus = status;

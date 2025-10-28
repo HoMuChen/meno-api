@@ -4,6 +4,7 @@
 const UserService = require('./user.service');
 const FileService = require('./file.service');
 const AuthService = require('./auth.service');
+const AuthorizationService = require('./authorization.service');
 const ProjectService = require('./project.service');
 const MeetingService = require('./meeting.service');
 const TranscriptionService = require('./transcription.service');
@@ -14,6 +15,7 @@ module.exports = {
   UserService,
   FileService,
   AuthService,
+  AuthorizationService,
   ProjectService,
   MeetingService,
   TranscriptionService,
