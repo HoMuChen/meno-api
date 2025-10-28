@@ -10,7 +10,7 @@ const createProjectRoutes = require('./project.routes');
 const createMeetingRoutes = require('./meeting.routes');
 const createTranscriptionRoutes = require('./transcription.routes');
 
-const createRoutes = (controllers) => {
+const createRoutes = (controllers, audioStorageProvider) => {
   const router = express.Router();
 
   // Health routes
@@ -25,8 +25,8 @@ const createRoutes = (controllers) => {
   // Project routes
   router.use('/projects', createProjectRoutes(controllers.projectController));
 
-  // Meeting routes (nested under projects)
-  router.use('/projects/:projectId/meetings', createMeetingRoutes(controllers.meetingController));
+  // Meeting routes (nested under projects) - pass audioStorageProvider for streaming uploads
+  router.use('/projects/:projectId/meetings', createMeetingRoutes(controllers.meetingController, audioStorageProvider));
 
   // Transcription routes (nested under meetings)
   router.use('/meetings/:meetingId/transcriptions', createTranscriptionRoutes(controllers.transcriptionController));

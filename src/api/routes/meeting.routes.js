@@ -4,11 +4,14 @@
  */
 const express = require('express');
 const { authenticate } = require('../middleware/auth.middleware');
-const { uploadAudio } = require('../middleware/upload.middleware');
+const { handleStreamingUpload } = require('../middleware/streaming-upload.middleware');
 const { validateCreateMeeting, validateUpdateMeeting } = require('../validators/meeting.validator');
 
-const createMeetingRoutes = (meetingController) => {
+const createMeetingRoutes = (meetingController, audioStorageProvider) => {
   const router = express.Router({ mergeParams: true }); // mergeParams to access :projectId
+
+  // Create streaming upload middleware with storage provider
+  const uploadAudio = handleStreamingUpload(audioStorageProvider);
 
   /**
    * @swagger

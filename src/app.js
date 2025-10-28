@@ -140,7 +140,7 @@ const createApp = () => {
   // Auth routes (at root level)
   app.use('/auth', createAuthRoutes(authController));
 
-  // API routes (at /api prefix)
+  // API routes (at /api prefix) - pass audioStorageProvider for streaming uploads
   app.use(config.api.prefix, createRoutes({
     userController,
     fileController,
@@ -148,7 +148,7 @@ const createApp = () => {
     projectController,
     meetingController,
     transcriptionController
-  }));
+  }, audioStorageProvider));
 
   // Serve static files (for local storage)
   if (config.storage.provider === 'local') {

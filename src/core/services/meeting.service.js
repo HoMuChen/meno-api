@@ -37,8 +37,8 @@ class MeetingService extends BaseService {
         originalname: audioFile.originalname,
         mimetype: audioFile.mimetype,
         size: audioFile.size,
-        path: audioFile.path,
-        filename: audioFile.filename
+        uri: audioFile.uri,
+        path: audioFile.path // May be undefined for streaming uploads
       }
     });
 
@@ -63,13 +63,7 @@ class MeetingService extends BaseService {
         userId
       });
 
-      // Generate unique file path for storage
-      const timestamp = Date.now();
-      const ext = path.extname(audioFile.originalname);
-      const basename = path.basename(audioFile.originalname, ext);
-      const storagePath = `meetings/${projectId}/${timestamp}-${basename}${ext}`;
-
-      // Get audio duration from request body or extract from file
+      // Get audio duration from request body or extract from file (if path available)
       let audioDuration = null;
 
       // If duration is provided in request body, use it directly
@@ -79,8 +73,8 @@ class MeetingService extends BaseService {
           duration: audioDuration,
           audioFile: audioFile.originalname
         });
-      } else {
-        // Otherwise, extract duration from audio file
+      } else if (audioFile.path) {
+        // Otherwise, try to extract duration from file (only if path exists - for local storage)
         try {
           audioDuration = await getAudioDuration(audioFile.path);
           this.logger.info('Audio duration extracted from file', {
@@ -94,47 +88,30 @@ class MeetingService extends BaseService {
           });
           // Continue without duration - it will default to null
         }
+      } else {
+        this.logger.warn('Audio duration not provided and file path not available (streaming upload)', {
+          audioFile: audioFile.originalname
+        });
       }
 
-      // Upload file to storage provider
-      this.logger.info('Meeting service: uploading file to storage', {
-        storagePath,
-        localPath: audioFile.path,
-        contentType: audioFile.mimetype,
-        size: audioFile.size,
-        originalName: audioFile.originalname
-      });
-
-      const uploadResult = await this.audioStorageProvider.upload(
-        storagePath,
-        audioFile.path, // Multer saved file path
-        {
-          contentType: audioFile.mimetype,
-          metadata: {
-            projectId,
-            userId,
-            originalName: audioFile.originalname
-          }
-        }
-      );
-
-      this.logger.info('Meeting service: file uploaded to storage successfully', {
-        uri: uploadResult.uri,
-        size: uploadResult.size,
-        storagePath
+      // File is already uploaded by streaming middleware
+      // audioFile.uri contains the storage URI
+      this.logger.info('Meeting service: using uploaded file from streaming middleware', {
+        uri: audioFile.uri,
+        size: audioFile.size
       });
 
       // Create meeting with storage URI
       const meeting = new Meeting({
         title: meetingData.title,
         projectId,
-        audioFile: uploadResult.uri, // Store URI instead of path
-        duration: audioDuration, // Set extracted duration
+        audioFile: audioFile.uri, // URI from streaming upload
+        duration: audioDuration, // Set extracted or provided duration
         recordingType: meetingData.recordingType || 'upload',
         transcriptionStatus: 'pending',
         transcriptionProgress: 0,
         metadata: {
-          fileSize: uploadResult.size,
+          fileSize: audioFile.size,
           mimeType: audioFile.mimetype,
           originalName: audioFile.originalname
         }
@@ -146,7 +123,7 @@ class MeetingService extends BaseService {
         meetingId: meeting._id,
         projectId,
         userId,
-        audioFileUri: uploadResult.uri
+        audioFileUri: audioFile.uri
       });
 
       // Increment user's usage counter (if duration available)
@@ -178,7 +155,7 @@ class MeetingService extends BaseService {
         this.logger.info('Auto-starting transcription', { meetingId: meeting._id });
 
         // Fire and forget - process transcription asynchronously
-        this._processTranscription(meeting._id, uploadResult.uri).catch(error => {
+        this._processTranscription(meeting._id, audioFile.uri).catch(error => {
           this.logger.error('Auto-transcription failed', {
             error: error.message,
             meetingId: meeting._id
