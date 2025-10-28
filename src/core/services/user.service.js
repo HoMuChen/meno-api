@@ -23,7 +23,7 @@ class UserService extends BaseService {
       const { skip, limit: parsedLimit } = this.getPaginationParams(page, limit);
 
       const [users, total] = await Promise.all([
-        User.find().skip(skip).limit(parsedLimit).sort({ createdAt: -1 }),
+        User.find().skip(skip).limit(parsedLimit).sort({ createdAt: -1 }).populate('tier'),
         User.countDocuments()
       ]);
 
@@ -40,7 +40,7 @@ class UserService extends BaseService {
    */
   async getUserById(userId) {
     try {
-      const user = await User.findById(userId);
+      const user = await User.findById(userId).populate('tier');
 
       if (!user) {
         throw new NotFoundError(`User not found with ID: ${userId}`);
@@ -92,7 +92,7 @@ class UserService extends BaseService {
       const user = await User.findByIdAndUpdate(userId, updateData, {
         new: true,
         runValidators: true
-      });
+      }).populate('tier');
 
       if (!user) {
         throw new NotFoundError(`User not found with ID: ${userId}`);
@@ -137,7 +137,7 @@ class UserService extends BaseService {
    */
   async uploadAvatar(userId, file) {
     try {
-      const user = await User.findById(userId);
+      const user = await User.findById(userId).populate('tier');
 
       if (!user) {
         throw new NotFoundError(`User not found with ID: ${userId}`);
@@ -180,7 +180,7 @@ class UserService extends BaseService {
   async getMonthlyUsage(userId, year = null, month = null) {
     try {
       // Verify user exists
-      const user = await User.findById(userId);
+      const user = await User.findById(userId).populate('tier');
       if (!user) {
         throw new NotFoundError(`User not found with ID: ${userId}`);
       }

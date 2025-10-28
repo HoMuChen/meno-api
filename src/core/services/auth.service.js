@@ -138,7 +138,7 @@ class AuthService extends BaseService {
       const { email, password } = credentials;
 
       // Find user with password field
-      const user = await User.findOne({ email }).select('+password');
+      const user = await User.findOne({ email }).select('+password').populate('tier');
       if (!user) {
         throw new Error('Invalid email or password');
       }
@@ -206,7 +206,7 @@ class AuthService extends BaseService {
         searchCriteria: { googleId, email }
       });
 
-      let user = await User.findOne({ $or: [{ googleId }, { email }] });
+      let user = await User.findOne({ $or: [{ googleId }, { email }] }).populate('tier');
 
       if (user) {
         this.logger.debug('Existing user found', {
@@ -331,7 +331,7 @@ class AuthService extends BaseService {
    */
   async getUserById(userId) {
     try {
-      const user = await User.findById(userId);
+      const user = await User.findById(userId).populate('tier');
       if (!user) {
         throw new Error('User not found');
       }

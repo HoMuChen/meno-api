@@ -152,7 +152,7 @@ class MeetingService extends BaseService {
       // Increment user's usage counter (if duration available)
       if (audioDuration && audioDuration > 0) {
         try {
-          const user = await User.findById(userId);
+          const user = await User.findById(userId).populate('tier');
           if (user) {
             user.addUsage(audioDuration);
             await user.save();

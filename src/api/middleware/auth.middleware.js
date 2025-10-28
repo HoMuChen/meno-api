@@ -59,7 +59,7 @@ const authenticate = async (req, res, next) => {
     });
 
     // Get user from database
-    const user = await User.findById(decoded.userId);
+    const user = await User.findById(decoded.userId).populate('tier');
 
     if (!user) {
       logger.warn('Token valid but user not found', {
@@ -158,7 +158,7 @@ const optionalAuth = async (req, res, next) => {
 
     const token = authHeader.substring(7);
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const user = await User.findById(decoded.userId);
+    const user = await User.findById(decoded.userId).populate('tier');
 
     if (user && user.status === 'active') {
       req.user = user;

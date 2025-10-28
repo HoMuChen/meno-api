@@ -85,7 +85,7 @@ class UsageService extends BaseService {
       const totalDuration = result.length > 0 ? result[0].totalDuration || 0 : 0;
 
       // Update user's cache
-      const user = await User.findById(userId);
+      const user = await User.findById(userId).populate('tier');
       if (user) {
         user.currentMonthUsage.duration = totalDuration;
         user.currentMonthUsage.lastReset = now;
@@ -132,7 +132,7 @@ class UsageService extends BaseService {
    */
   async incrementUsage(userId, durationInSeconds) {
     try {
-      const user = await User.findById(userId);
+      const user = await User.findById(userId).populate('tier');
 
       if (!user) {
         throw new NotFoundError(`User not found with ID: ${userId}`);
@@ -161,7 +161,7 @@ class UsageService extends BaseService {
    */
   async getUsageHistory(userId, months = 3) {
     try {
-      const user = await User.findById(userId);
+      const user = await User.findById(userId).populate('tier');
 
       if (!user) {
         throw new NotFoundError(`User not found with ID: ${userId}`);
