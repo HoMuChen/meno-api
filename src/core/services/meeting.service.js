@@ -528,6 +528,39 @@ class MeetingService extends BaseService {
   }
 
   /**
+   * Retry transcription with exponential backoff for 503 errors
+   * @param {Function} transcribeFn - Transcription function to call
+   * @param {number} maxRetries - Maximum number of retries (default: 3)
+   * @param {number} initialDelay - Initial delay in ms (default: 5000)
+   * @returns {Promise} Transcription result
+   * @private
+   */
+  async _retryTranscription(transcribeFn, maxRetries = 3, initialDelay = 5000) {
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        return await transcribeFn();
+      } catch (error) {
+        const is503Error = error.message && error.message.includes('503') && error.message.includes('overloaded');
+        const isLastAttempt = attempt === maxRetries;
+
+        if (!is503Error || isLastAttempt) {
+          throw error; // Re-throw if not 503 or last attempt
+        }
+
+        const delay = initialDelay * Math.pow(2, attempt); // Exponential backoff
+        this.logger.warn('Gemini API overloaded (503), retrying...', {
+          attempt: attempt + 1,
+          maxRetries,
+          retryAfter: `${delay}ms`,
+          error: error.message
+        });
+
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+  }
+
+  /**
    * Process transcription asynchronously
    * @param {string} meetingId - Meeting ID
    * @param {string} audioFileUri - Storage URI for audio file
@@ -552,13 +585,15 @@ class MeetingService extends BaseService {
         serviceType: this.transcriptionService.constructor.name
       });
 
-      // Call transcription service
+      // Call transcription service with retry logic for 503 errors
       // For Gemini streaming: service handles incremental saves internally
       // For mock service: returns all segments at once
-      const segments = await this.transcriptionService.transcribeAudio(
-        audioFilePath,
-        meetingId // Pass meetingId for Gemini streaming progress updates
-      );
+      const segments = await this._retryTranscription(async () => {
+        return await this.transcriptionService.transcribeAudio(
+          audioFilePath,
+          meetingId // Pass meetingId for Gemini streaming progress updates
+        );
+      });
 
       this.logger.debug('Transcription service returned', {
         meetingId,
