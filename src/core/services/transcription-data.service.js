@@ -6,8 +6,9 @@ const Transcription = require('../../models/transcription.model');
 const BaseService = require('./base.service');
 
 class TranscriptionDataService extends BaseService {
-  constructor(logger) {
+  constructor(logger, embeddingService = null) {
     super(logger);
+    this.embeddingService = embeddingService;
   }
 
   /**
@@ -27,6 +28,41 @@ class TranscriptionDataService extends BaseService {
         text: segment.text,
         isEdited: false
       }));
+
+      // Generate embeddings if embedding service is available
+      if (this.embeddingService && this.embeddingService.isEnabled()) {
+        try {
+          this.logger.debug('Generating embeddings for transcriptions', {
+            meetingId,
+            count: transcriptions.length
+          });
+
+          // Extract texts for batch embedding generation
+          const texts = transcriptions.map(t => t.text);
+
+          // Generate embeddings in batch (more efficient)
+          const embeddings = await this.embeddingService.generateEmbeddingsBatch(texts);
+
+          // Add embeddings to transcription documents
+          transcriptions.forEach((transcription, index) => {
+            if (embeddings[index]) {
+              transcription.embedding = embeddings[index];
+            }
+          });
+
+          this.logger.debug('Embeddings generated', {
+            meetingId,
+            successCount: embeddings.filter(e => e !== null).length,
+            totalCount: embeddings.length
+          });
+        } catch (embeddingError) {
+          // Log error but continue with save (graceful degradation)
+          this.logger.warn('Failed to generate embeddings, continuing without embeddings', {
+            meetingId,
+            error: embeddingError.message
+          });
+        }
+      }
 
       // Bulk insert
       const savedTranscriptions = await Transcription.bulkInsert(transcriptions);

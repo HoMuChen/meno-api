@@ -21,6 +21,8 @@ const ProjectService = require('./core/services/project.service');
 const MeetingService = require('./core/services/meeting.service');
 const TranscriptionDataService = require('./core/services/transcription-data.service');
 const TranscriptionServiceFactory = require('./core/services/transcription-service.factory');
+const EmbeddingService = require('./core/services/embedding.service');
+const SemanticSearchService = require('./core/services/semantic-search.service');
 const UserController = require('./api/controllers/user.controller');
 const FileController = require('./api/controllers/file.controller');
 const HealthController = require('./api/controllers/health.controller');
@@ -68,7 +70,19 @@ const createApp = () => {
   const authService = new AuthService(logger);
   const authorizationService = new AuthorizationService(logger);
   const projectService = new ProjectService(logger);
-  const transcriptionDataService = new TranscriptionDataService(logger);
+
+  // Initialize embedding service for semantic search
+  const embeddingService = new EmbeddingService(logger);
+
+  // Initialize transcription data service with embedding support
+  const transcriptionDataService = new TranscriptionDataService(logger, embeddingService);
+
+  // Initialize semantic search service
+  const semanticSearchService = new SemanticSearchService(
+    logger,
+    embeddingService,
+    transcriptionDataService
+  );
 
   // Initialize meeting service first (needed for transcription factory)
   const meetingService = new MeetingService(
@@ -98,7 +112,12 @@ const createApp = () => {
   const authController = new AuthController(authService, logger);
   const projectController = new ProjectController(projectService, logger);
   const meetingController = new MeetingController(meetingService, logger);
-  const transcriptionController = new TranscriptionController(transcriptionDataService, logger);
+  const transcriptionController = new TranscriptionController(
+    transcriptionDataService,
+    semanticSearchService,
+    projectService,
+    logger
+  );
 
   // Basic middleware
   app.use(express.json());

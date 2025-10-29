@@ -3,12 +3,14 @@
  * Handles HTTP requests for transcription endpoints
  */
 const BaseController = require('./base.controller');
-const { BadRequestError } = require('../../utils/errors');
+const { BadRequestError, ForbiddenError, NotFoundError } = require('../../utils/errors');
 
 class TranscriptionController extends BaseController {
-  constructor(transcriptionDataService, logger) {
+  constructor(transcriptionDataService, semanticSearchService, projectService, logger) {
     super(transcriptionDataService, logger);
     this.transcriptionDataService = transcriptionDataService;
+    this.semanticSearchService = semanticSearchService;
+    this.projectService = projectService;
   }
 
     /**
@@ -120,6 +122,89 @@ class TranscriptionController extends BaseController {
     }
 
     return this.sendSuccess(res, statusData);
+  });
+
+  /**
+   * Semantic search
+   * Vector-based semantic search within a single meeting
+   */
+  semanticSearch = this.asyncHandler(async (req, res) => {
+    const { meetingId } = req.params;
+    const { q, page, limit, scoreThreshold, speaker } = req.query;
+
+    if (!q) {
+      throw new BadRequestError('Search query is required');
+    }
+
+    // Meeting ownership already verified by middleware (req.meeting available)
+    const result = await this.semanticSearchService.searchSingleMeeting(meetingId, q, {
+      page: page ? parseInt(page) : undefined,
+      limit: limit ? parseInt(limit) : undefined,
+      scoreThreshold: scoreThreshold ? parseFloat(scoreThreshold) : undefined,
+      speaker
+    });
+
+    return this.sendSuccess(res, result);
+  });
+
+  /**
+   * Search across meetings
+   * Semantic search across all meetings in a project
+   */
+  searchAcrossMeetings = this.asyncHandler(async (req, res) => {
+    const { projectId } = req.params;
+    const { q, page, limit, scoreThreshold, from, to, speaker, groupByMeeting } = req.query;
+
+    if (!q) {
+      throw new BadRequestError('Search query is required');
+    }
+
+    // Verify project ownership
+    const project = await this.projectService.getProjectById(projectId, req.user.id);
+
+    if (!project) {
+      throw new NotFoundError('Project not found');
+    }
+
+    // Check authorization
+    if (project.userId.toString() !== req.user.id) {
+      throw new ForbiddenError('Not authorized to access this project');
+    }
+
+    const result = await this.semanticSearchService.searchAcrossMeetings(projectId, q, {
+      page: page ? parseInt(page) : undefined,
+      limit: limit ? parseInt(limit) : undefined,
+      scoreThreshold: scoreThreshold ? parseFloat(scoreThreshold) : undefined,
+      from,
+      to,
+      speaker,
+      groupByMeeting: groupByMeeting !== 'false' // Default to true
+    });
+
+    return this.sendSuccess(res, result);
+  });
+
+  /**
+   * Hybrid search
+   * Combines semantic and keyword search for better results
+   */
+  hybridSearch = this.asyncHandler(async (req, res) => {
+    const { meetingId } = req.params;
+    const { q, page, limit, scoreThreshold, speaker } = req.query;
+
+    if (!q) {
+      throw new BadRequestError('Search query is required');
+    }
+
+    // Meeting ownership already verified by middleware (req.meeting available)
+    const result = await this.semanticSearchService.searchHybrid(meetingId, q, {
+      page: page ? parseInt(page) : undefined,
+      limit: limit ? parseInt(limit) : undefined,
+      scoreThreshold: scoreThreshold ? parseFloat(scoreThreshold) : undefined,
+      speaker
+    });
+
+    return this.sendSuccess(res, result);
   });
 }
 

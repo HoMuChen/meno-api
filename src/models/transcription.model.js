@@ -80,6 +80,11 @@ const transcriptionSchema = new mongoose.Schema(
       trim: true,
       maxlength: [5000, 'Transcription text cannot exceed 5000 characters']
     },
+    embedding: {
+      type: [Number],
+      required: false,
+      select: false // Don't return by default to reduce payload size
+    },
     isEdited: {
       type: Boolean,
       default: false

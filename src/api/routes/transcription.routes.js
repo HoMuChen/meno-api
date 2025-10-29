@@ -117,6 +117,89 @@ const createTranscriptionRoutes = (transcriptionController) => {
 
   /**
    * @swagger
+   * /api/meetings/{meetingId}/transcriptions/semantic-search:
+   *   get:
+   *     summary: Semantic search transcriptions
+   *     description: Vector-based semantic search using AI embeddings for better conceptual matching
+   *     tags: [Transcriptions]
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: meetingId
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: Meeting ID
+   *       - in: query
+   *         name: q
+   *         required: true
+   *         schema:
+   *           type: string
+   *           maxLength: 200
+   *         description: Search query (finds semantically similar content)
+   *       - in: query
+   *         name: scoreThreshold
+   *         schema:
+   *           type: number
+   *           minimum: 0
+   *           maximum: 1
+   *           default: 0.7
+   *         description: Minimum similarity score (0-1)
+   *       - in: query
+   *         name: speaker
+   *         schema:
+   *           type: string
+   *         description: Filter by speaker name
+   *     responses:
+   *       200:
+   *         description: Semantic search results retrieved successfully
+   *       400:
+   *         description: Invalid search query or embedding service not configured
+   *       401:
+   *         description: Unauthorized
+   *       404:
+   *         description: Meeting not found
+   */
+  router.get('/semantic-search', validateSearchQuery, transcriptionController.semanticSearch);
+
+  /**
+   * @swagger
+   * /api/meetings/{meetingId}/transcriptions/hybrid-search:
+   *   get:
+   *     summary: Hybrid search transcriptions
+   *     description: Combines semantic and keyword search for comprehensive results
+   *     tags: [Transcriptions]
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: meetingId
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: Meeting ID
+   *       - in: query
+   *         name: q
+   *         required: true
+   *         schema:
+   *           type: string
+   *           maxLength: 200
+   *         description: Search query
+   *     responses:
+   *       200:
+   *         description: Hybrid search results retrieved successfully
+   *       400:
+   *         description: Invalid search query
+   *       401:
+   *         description: Unauthorized
+   *       404:
+   *         description: Meeting not found
+   */
+  router.get('/hybrid-search', validateSearchQuery, transcriptionController.hybridSearch);
+
+  /**
+   * @swagger
    * /api/meetings/{meetingId}/transcriptions/speaker/{speaker}:
    *   get:
    *     summary: Get transcriptions by speaker
