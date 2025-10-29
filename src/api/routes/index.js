@@ -9,6 +9,7 @@ const createHealthRoutes = require('./health.routes');
 const createProjectRoutes = require('./project.routes');
 const createMeetingRoutes = require('./meeting.routes');
 const createTranscriptionRoutes = require('./transcription.routes');
+const createPersonRoutes = require('./person.routes');
 
 const createRoutes = (controllers, audioStorageProvider) => {
   const router = express.Router();
@@ -27,6 +28,9 @@ const createRoutes = (controllers, audioStorageProvider) => {
 
   // Meeting routes (nested under projects) - pass audioStorageProvider for streaming uploads
   router.use('/projects/:projectId/meetings', createMeetingRoutes(controllers.meetingController, audioStorageProvider));
+
+  // People routes
+  router.use('/people', createPersonRoutes(controllers.personController));
 
   // Project-level transcription search route (cross-meeting search)
   const { authenticate } = require('../middleware/auth.middleware');

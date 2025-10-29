@@ -10,6 +10,7 @@ const MeetingService = require('./meeting.service');
 const TranscriptionService = require('./transcription.service');
 const MockTranscriptionService = require('./mock-transcription.service');
 const TranscriptionDataService = require('./transcription-data.service');
+const PersonService = require('./person.service');
 
 module.exports = {
   UserService,
@@ -20,5 +21,6 @@ module.exports = {
   MeetingService,
   TranscriptionService,
   MockTranscriptionService,
-  TranscriptionDataService
+  TranscriptionDataService,
+  PersonService
 };

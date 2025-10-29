@@ -16,7 +16,7 @@ const { errorHandler, notFound } = require('./api/middleware/errorHandler');
 const requestLogger = require('./api/middleware/requestLogger');
 
 // Import services and controllers
-const { UserService, FileService, AuthService, AuthorizationService } = require('./core/services');
+const { UserService, FileService, AuthService, AuthorizationService, PersonService } = require('./core/services');
 const ProjectService = require('./core/services/project.service');
 const MeetingService = require('./core/services/meeting.service');
 const TranscriptionDataService = require('./core/services/transcription-data.service');
@@ -31,6 +31,7 @@ const AuthController = require('./api/controllers/auth.controller');
 const ProjectController = require('./api/controllers/project.controller');
 const MeetingController = require('./api/controllers/meeting.controller');
 const TranscriptionController = require('./api/controllers/transcription.controller');
+const PersonController = require('./api/controllers/person.controller');
 
 /**
  * Create and configure Express app
@@ -70,6 +71,7 @@ const createApp = () => {
   const fileService = new FileService(logger, storageProvider);
   const authService = new AuthService(logger);
   const authorizationService = new AuthorizationService(logger);
+  const personService = new PersonService(logger);
 
   // Initialize project service without meeting service (circular dependency)
   const projectService = new ProjectService(logger);
@@ -128,6 +130,7 @@ const createApp = () => {
     projectService,
     logger
   );
+  const personController = new PersonController(personService, logger);
 
   // Basic middleware
   app.use(express.json());
@@ -178,7 +181,8 @@ const createApp = () => {
     healthController,
     projectController,
     meetingController,
-    transcriptionController
+    transcriptionController,
+    personController
   }, audioStorageProvider));
 
   // Serve static files (for local storage)
