@@ -280,11 +280,6 @@ components:
           type: string
           description: Transcribed text segment
           maxLength: 5000
-        confidence:
-          type: number
-          description: Transcription confidence score (0-1)
-          minimum: 0
-          maximum: 1
         isEdited:
           type: boolean
           description: Whether the transcription was manually edited
@@ -725,6 +720,109 @@ paths:
                       status:
                         type: string
                         example: disconnected
+  /api/projects/{projectId}/transcriptions/search-all:
+    get:
+      summary: Search transcriptions across all meetings in a project
+      description: Semantic search across all meetings in a project using AI embeddings
+      tags:
+        - Transcriptions
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: projectId
+          required: true
+          schema:
+            type: string
+          description: Project ID
+        - in: query
+          name: q
+          required: true
+          schema:
+            type: string
+            maxLength: 200
+          description: Search query (finds semantically similar content across all meetings)
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+          description: Page number
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 20
+          description: Results per page
+        - in: query
+          name: scoreThreshold
+          schema:
+            type: number
+            minimum: 0
+            maximum: 1
+            default: 0.7
+          description: Minimum similarity score (0-1)
+        - in: query
+          name: from
+          schema:
+            type: string
+            format: date
+          description: Filter meetings created after this date (ISO 8601)
+        - in: query
+          name: to
+          schema:
+            type: string
+            format: date
+          description: Filter meetings created before this date (ISO 8601)
+        - in: query
+          name: speaker
+          schema:
+            type: string
+          description: Filter by speaker name
+        - in: query
+          name: groupByMeeting
+          schema:
+            type: boolean
+            default: true
+          description: Group results by meeting (true) or return flat list (false)
+      responses:
+        '200':
+          description: Search results retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      results:
+                        type: array
+                        description: Search results grouped by meeting or flat list
+                      pagination:
+                        type: object
+                        properties:
+                          page:
+                            type: integer
+                          limit:
+                            type: integer
+                          total:
+                            type: integer
+                      searchType:
+                        type: string
+                        example: semantic_cross_meeting
+                      meetingsSearched:
+                        type: integer
+        '400':
+          description: Invalid search query or embedding service not configured
+        '401':
+          description: Unauthorized
+        '403':
+          description: Not authorized to access this project
+        '404':
+          description: Project not found
   /api/projects/{projectId}/meetings:
     post:
       summary: Create a new meeting with audio file
@@ -768,14 +866,7 @@ paths:
                 duration:
                   type: number
                   format: float
-                  description: |
-                    Audio duration in seconds (optional).
-
-                    If not provided, server will attempt to extract duration automatically:
-                    - For local storage: extracts from file path (fast)
-                    - For GCS storage: downloads to temp and extracts (slower, ~1-2s latency)
-
-                    **Recommended**: Extract duration on client side before upload for best performance.
+                  description: Audio duration in seconds (optional, calculated from file if not provided)
                   example: 125.5
       responses:
         '201':
@@ -1329,6 +1420,81 @@ paths:
           description: Unauthorized
         '404':
           description: Meeting not found
+  /api/meetings/{meetingId}/transcriptions/semantic-search:
+    get:
+      summary: Semantic search transcriptions
+      description: Vector-based semantic search using AI embeddings for better conceptual matching
+      tags:
+        - Transcriptions
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: meetingId
+          required: true
+          schema:
+            type: string
+          description: Meeting ID
+        - in: query
+          name: q
+          required: true
+          schema:
+            type: string
+            maxLength: 200
+          description: Search query (finds semantically similar content)
+        - in: query
+          name: scoreThreshold
+          schema:
+            type: number
+            minimum: 0
+            maximum: 1
+            default: 0.7
+          description: Minimum similarity score (0-1)
+        - in: query
+          name: speaker
+          schema:
+            type: string
+          description: Filter by speaker name
+      responses:
+        '200':
+          description: Semantic search results retrieved successfully
+        '400':
+          description: Invalid search query or embedding service not configured
+        '401':
+          description: Unauthorized
+        '404':
+          description: Meeting not found
+  /api/meetings/{meetingId}/transcriptions/hybrid-search:
+    get:
+      summary: Hybrid search transcriptions
+      description: Combines semantic and keyword search for comprehensive results
+      tags:
+        - Transcriptions
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: meetingId
+          required: true
+          schema:
+            type: string
+          description: Meeting ID
+        - in: query
+          name: q
+          required: true
+          schema:
+            type: string
+            maxLength: 200
+          description: Search query
+      responses:
+        '200':
+          description: Hybrid search results retrieved successfully
+        '400':
+          description: Invalid search query
+        '401':
+          description: Unauthorized
+        '404':
+          description: Meeting not found
   /api/meetings/{meetingId}/transcriptions/speaker/{speaker}:
     get:
       summary: Get transcriptions by speaker
@@ -1465,6 +1631,33 @@ paths:
           description: Transcription updated successfully
         '400':
           description: Validation error
+        '401':
+          description: Unauthorized
+        '404':
+          description: Transcription not found
+    delete:
+      summary: Delete transcription
+      description: Delete a specific transcription segment
+      tags:
+        - Transcriptions
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: meetingId
+          required: true
+          schema:
+            type: string
+          description: Meeting ID
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: Transcription ID
+      responses:
+        '200':
+          description: Transcription deleted successfully
         '401':
           description: Unauthorized
         '404':
