@@ -335,36 +335,29 @@ class RetrievalService extends BaseService {
 
     const vectorResults = await Transcription.aggregate(vectorPipeline);
 
+    this.logger.info('Stage 1 vector search completed', {
+      candidatesFound: vectorResults.length,
+      query: query.substring(0, 50)
+    });
+
     if (vectorResults.length === 0) {
+      this.logger.warn('No vector search candidates found, returning empty results');
       return [];
     }
 
     // Extract candidate IDs and create vector score map
     const candidateIds = vectorResults.map(r => r._id);
+    const candidateIdSet = new Set(candidateIds.map(id => id.toString()));
     const vectorScoreMap = new Map(vectorResults.map(r => [r._id.toString(), r.vectorScore]));
 
-    // STAGE 2: Atlas Search on candidates only
+    // STAGE 2: Atlas Search with match filter, then filter to candidates
     const searchPipeline = [
       {
         $search: {
           index: 'transcription_text_index',
-          compound: {
-            must: [
-              {
-                text: {
-                  query: query,
-                  path: 'text'
-                }
-              }
-            ],
-            filter: [
-              {
-                in: {
-                  path: '_id',
-                  value: candidateIds
-                }
-              }
-            ]
+          text: {
+            query: query,
+            path: 'text'
           }
         }
       },
@@ -373,8 +366,15 @@ class RetrievalService extends BaseService {
           textScore: { $meta: 'searchScore' }
         }
       },
+      // Apply scope filter (meetingId, speaker, etc.)
       {
         $match: matchFilter
+      },
+      // Filter to only include Stage 1 candidates
+      {
+        $match: {
+          _id: { $in: candidateIds }
+        }
       }
     ];
 
@@ -419,6 +419,12 @@ class RetrievalService extends BaseService {
 
     const searchResults = await Transcription.aggregate(searchPipeline);
 
+    this.logger.info('Stage 2 Atlas Search completed', {
+      searchResultsFound: searchResults.length,
+      candidatesProvided: candidateIds.length,
+      query: query.substring(0, 50)
+    });
+
     // Combine scores: 60% semantic + 40% keyword
     const combinedResults = searchResults.map(result => {
       const vectorScore = vectorScoreMap.get(result._id.toString()) || 0;
@@ -442,6 +448,13 @@ class RetrievalService extends BaseService {
     const startIdx = (page - 1) * topK;
     const endIdx = startIdx + topK;
     const paginatedResults = filteredResults.slice(startIdx, endIdx);
+
+    this.logger.info('Two-stage retrieval final results', {
+      combinedResultsCount: combinedResults.length,
+      afterThresholdCount: filteredResults.length,
+      afterPaginationCount: paginatedResults.length,
+      scoreThreshold
+    });
 
     return paginatedResults;
   }
