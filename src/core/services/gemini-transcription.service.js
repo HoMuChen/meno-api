@@ -166,12 +166,13 @@ Do NOT use array format. Each line must be parseable independently.`;
             if (!segmentBuffer) {
               // First segment - initialize buffer
               segmentBuffer = { ...segment };
-            } else if (segmentBuffer.speaker === segment.speaker) {
-              // Same speaker - merge by extending endTime and appending text
+            } else if (segmentBuffer.speaker === segment.speaker &&
+                       (segment.endTime - segmentBuffer.startTime) <= 30000) {
+              // Same speaker AND duration < 30s - merge by extending endTime and appending text
               segmentBuffer.endTime = segment.endTime;
               segmentBuffer.text = segmentBuffer.text + ' ' + segment.text;
             } else {
-              // Different speaker - flush buffer and start new one
+              // Different speaker OR duration >= 30s - flush buffer and start new one
               try {
                 await this.transcriptionDataService.saveTranscriptions(meetingId, [segmentBuffer]);
                 processedSegments++;
@@ -180,11 +181,14 @@ Do NOT use array format. Each line must be parseable independently.`;
                 const progress = Math.min(95, Math.floor((processedSegments / estimatedTotal) * 100));
                 await this._updateMeetingProgress(meetingId, progress, processedSegments);
 
+                const flushReason = segmentBuffer.speaker !== segment.speaker ? 'speaker_change' : 'duration_limit';
                 this.logger.debug('Merged segment saved', {
                   meetingId,
                   segmentIndex: processedSegments,
                   progress,
                   speaker: segmentBuffer.speaker,
+                  duration: segmentBuffer.endTime - segmentBuffer.startTime,
+                  reason: flushReason,
                   textPreview: segmentBuffer.text.substring(0, 50)
                 });
               } catch (saveError) {
@@ -224,7 +228,8 @@ Do NOT use array format. Each line must be parseable independently.`;
             // Apply same merging logic to final segments
             if (!segmentBuffer) {
               segmentBuffer = { ...segment };
-            } else if (segmentBuffer.speaker === segment.speaker) {
+            } else if (segmentBuffer.speaker === segment.speaker &&
+                       (segment.endTime - segmentBuffer.startTime) <= 30000) {
               segmentBuffer.endTime = segment.endTime;
               segmentBuffer.text = segmentBuffer.text + ' ' + segment.text;
             } else {
@@ -235,9 +240,13 @@ Do NOT use array format. Each line must be parseable independently.`;
                 const progress = Math.min(95, Math.floor((processedSegments / estimatedTotal) * 100));
                 await this._updateMeetingProgress(meetingId, progress, processedSegments);
 
+                const flushReason = segmentBuffer.speaker !== segment.speaker ? 'speaker_change' : 'duration_limit';
                 this.logger.debug('Final merged segment saved', {
                   meetingId,
-                  segmentIndex: processedSegments
+                  segmentIndex: processedSegments,
+                  speaker: segmentBuffer.speaker,
+                  duration: segmentBuffer.endTime - segmentBuffer.startTime,
+                  reason: flushReason
                 });
               } catch (saveError) {
                 this.logger.error('Error saving final merged segment', {
@@ -262,7 +271,8 @@ Do NOT use array format. Each line must be parseable independently.`;
           this.logger.info('Final segment buffer flushed', {
             meetingId,
             speaker: segmentBuffer.speaker,
-            duration: segmentBuffer.endTime - segmentBuffer.startTime
+            duration: segmentBuffer.endTime - segmentBuffer.startTime,
+            reason: 'final_flush'
           });
         } catch (saveError) {
           this.logger.error('Error flushing final segment buffer', {
