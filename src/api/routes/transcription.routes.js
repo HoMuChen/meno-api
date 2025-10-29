@@ -355,6 +355,38 @@ const createTranscriptionRoutes = (transcriptionController) => {
    */
   router.put('/:id', validateUpdateTranscription, transcriptionController.update);
 
+  /**
+   * @swagger
+   * /api/meetings/{meetingId}/transcriptions/{id}:
+   *   delete:
+   *     summary: Delete transcription
+   *     description: Delete a specific transcription segment
+   *     tags: [Transcriptions]
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: meetingId
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: Meeting ID
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: Transcription ID
+   *     responses:
+   *       200:
+   *         description: Transcription deleted successfully
+   *       401:
+   *         description: Unauthorized
+   *       404:
+   *         description: Transcription not found
+   */
+  router.delete('/:id', transcriptionController.delete);
+
   return router;
 };
 

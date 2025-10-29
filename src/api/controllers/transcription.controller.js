@@ -50,6 +50,16 @@ class TranscriptionController extends BaseController {
     return this.sendSuccess(res, updatedTranscription, 'Transcription updated successfully');
   });
 
+  /**
+   * Delete
+   */
+  delete = this.asyncHandler(async (req, res) => {
+    // Meeting ownership already verified by middleware (req.meeting available)
+    const deletedTranscription = await this.transcriptionDataService.deleteTranscription(req.params.id);
+
+    return this.sendSuccess(res, deletedTranscription, 'Transcription deleted successfully');
+  });
+
     /**
    * search
    */

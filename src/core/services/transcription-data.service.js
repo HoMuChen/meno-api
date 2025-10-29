@@ -165,6 +165,32 @@ class TranscriptionDataService extends BaseService {
   }
 
   /**
+   * Delete a single transcription by ID
+   * @param {string} transcriptionId - Transcription ID
+   * @returns {Promise<Object>} Deleted transcription
+   */
+  async deleteTranscription(transcriptionId) {
+    try {
+      const transcription = await Transcription.findById(transcriptionId);
+
+      if (!transcription) {
+        throw new Error('Transcription not found');
+      }
+
+      await Transcription.deleteOne({ _id: transcriptionId });
+
+      this.logSuccess('Transcription deleted', {
+        transcriptionId,
+        meetingId: transcription.meetingId
+      });
+
+      return transcription.toSafeObject();
+    } catch (error) {
+      this.logAndThrow(error, 'Delete transcription', { transcriptionId });
+    }
+  }
+
+  /**
    * Delete all transcriptions for a meeting
    * @param {string} meetingId - Meeting ID
    * @returns {Promise<Object>} Deletion result
