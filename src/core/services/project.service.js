@@ -7,8 +7,9 @@ const Meeting = require('../../models/meeting.model');
 const BaseService = require('./base.service');
 
 class ProjectService extends BaseService {
-  constructor(logger) {
+  constructor(logger, meetingService = null) {
     super(logger);
+    this.meetingService = meetingService;
   }
 
   /**
@@ -162,12 +163,21 @@ class ProjectService extends BaseService {
         throw new Error('Project not found');
       }
 
-      // Delete all meetings in this project
-      // The Meeting's pre-remove hook will delete transcriptions
+      // Delete all meetings in this project using MeetingService
+      // This ensures proper cascade deletion including audio files and transcriptions
       const meetings = await Meeting.find({ projectId });
 
-      for (const meeting of meetings) {
-        await meeting.deleteOne();
+      if (this.meetingService) {
+        // Use MeetingService for proper cascade deletion
+        for (const meeting of meetings) {
+          await this.meetingService.deleteMeeting(meeting._id.toString(), userId);
+        }
+      } else {
+        // Fallback: direct deletion (should not happen in production)
+        this.logger.warn('MeetingService not available, using direct deletion', { projectId });
+        for (const meeting of meetings) {
+          await meeting.deleteOne();
+        }
       }
 
       // Delete the project

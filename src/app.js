@@ -69,6 +69,8 @@ const createApp = () => {
   const fileService = new FileService(logger, storageProvider);
   const authService = new AuthService(logger);
   const authorizationService = new AuthorizationService(logger);
+
+  // Initialize project service without meeting service (circular dependency)
   const projectService = new ProjectService(logger);
 
   // Initialize embedding service for semantic search
@@ -104,6 +106,9 @@ const createApp = () => {
 
   // Set the transcription service on meeting service
   meetingService.transcriptionService = transcriptionService;
+
+  // Set the meeting service on project service (for cascade deletion)
+  projectService.meetingService = meetingService;
 
   // Initialize controllers with services
   const userController = new UserController(userService, logger);

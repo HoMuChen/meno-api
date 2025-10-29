@@ -266,17 +266,6 @@ meetingSchema.statics._parseSortString = function (sortStr) {
   return sort;
 };
 
-// Pre-remove hook to clean up related data
-meetingSchema.pre('remove', async function (next) {
-  try {
-    // Delete all transcriptions for this meeting
-    await mongoose.model('Transcription').deleteMany({ meetingId: this._id });
-    next();
-  } catch (error) {
-    next(error);
-  }
-});
-
 const Meeting = mongoose.model('Meeting', meetingSchema);
 
 module.exports = Meeting;
