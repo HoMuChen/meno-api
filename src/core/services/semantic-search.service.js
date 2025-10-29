@@ -1,10 +1,10 @@
 /**
  * Semantic Search Service
- * Vector-based semantic search over transcriptions using embeddings
- * Supports single-meeting search, cross-meeting search, and hybrid search
+ * Provides unified hybrid search over transcriptions using two-stage retrieval
+ * All search operations now use RetrievalService with hybrid mode by default
  *
- * Note: Core retrieval logic has been moved to RetrievalService
- * This service now focuses on API-specific formatting and hybrid search
+ * Note: This service focuses on API-specific formatting
+ * Core retrieval logic is in RetrievalService
  */
 
 class SemanticSearchService {
@@ -16,13 +16,13 @@ class SemanticSearchService {
   }
 
   /**
-   * Semantic search within a single meeting
+   * Hybrid search within a single meeting using two-stage retrieval
    * @param {string} meetingId - Meeting ID to search within
    * @param {string} query - Search query text
    * @param {Object} options - Search options
    * @returns {Promise<Object>} Search results with transcriptions and pagination
    */
-  async searchSingleMeeting(meetingId, query, options = {}) {
+  async searchHybrid(meetingId, query, options = {}) {
     const {
       page = 1,
       limit = 20,
@@ -31,7 +31,7 @@ class SemanticSearchService {
     } = options;
 
     try {
-      this.logger.info('Performing semantic search', {
+      this.logger.info('Performing hybrid search', {
         meetingId,
         query,
         page,
@@ -39,12 +39,13 @@ class SemanticSearchService {
         scoreThreshold
       });
 
-      // Delegate to RetrievalService
+      // Build filters
       const filters = {};
       if (speaker) {
         filters.speaker = speaker;
       }
 
+      // Use two-stage hybrid retrieval
       const retrievalResult = await this.retrievalService.retrieve(query, {
         scope: 'meeting',
         scopeId: meetingId,
@@ -52,12 +53,14 @@ class SemanticSearchService {
         topK: limit,
         scoreThreshold,
         page,
-        includeMeetingInfo: false
+        includeMeetingInfo: false,
+        hybrid: true
       });
 
-      this.logger.info('Semantic search completed', {
+      this.logger.info('Hybrid search completed', {
         meetingId,
-        resultCount: retrievalResult.results.length
+        resultCount: retrievalResult.results.length,
+        strategy: retrievalResult.metadata.strategy
       });
 
       // Format response to match existing API
@@ -68,10 +71,11 @@ class SemanticSearchService {
           limit,
           total: retrievalResult.results.length
         },
-        searchType: 'semantic'
+        searchType: 'hybrid',
+        strategy: retrievalResult.metadata.strategy
       };
     } catch (error) {
-      this.logger.error('Semantic search failed', {
+      this.logger.error('Hybrid search failed', {
         meetingId,
         query,
         error: error.message
@@ -81,7 +85,7 @@ class SemanticSearchService {
   }
 
   /**
-   * Semantic search across all meetings in a project
+   * Hybrid search across all meetings in a project
    * @param {string} projectId - Project ID to search within
    * @param {string} query - Search query text
    * @param {Object} options - Search options
@@ -95,17 +99,19 @@ class SemanticSearchService {
       from = null,
       to = null,
       speaker = null,
-      groupByMeeting = true
+      groupByMeeting = true,
+      hybrid = true
     } = options;
 
     try {
-      this.logger.info('Performing cross-meeting semantic search', {
+      this.logger.info('Performing cross-meeting search', {
         projectId,
         query,
         page,
         limit,
         scoreThreshold,
-        groupByMeeting
+        groupByMeeting,
+        hybrid
       });
 
       // Build filters
@@ -120,7 +126,7 @@ class SemanticSearchService {
         filters.to = to;
       }
 
-      // Delegate to RetrievalService
+      // Use hybrid retrieval (or semantic-only if hybrid=false)
       const retrievalResult = await this.retrievalService.retrieve(query, {
         scope: 'project',
         scopeId: projectId,
@@ -128,7 +134,8 @@ class SemanticSearchService {
         topK: limit,
         scoreThreshold,
         page,
-        includeMeetingInfo: true // Include meeting info for grouping
+        includeMeetingInfo: true, // Include meeting info for grouping
+        hybrid
       });
 
       // Check if we found any results
@@ -136,7 +143,8 @@ class SemanticSearchService {
         return {
           results: [],
           pagination: { page, limit, total: 0 },
-          searchType: 'semantic_cross_meeting',
+          searchType: hybrid ? 'hybrid_cross_meeting' : 'semantic_cross_meeting',
+          strategy: retrievalResult.metadata.strategy,
           meetingsSearched: 0
         };
       }
@@ -152,10 +160,11 @@ class SemanticSearchService {
       // Count unique meetings
       const uniqueMeetings = new Set(retrievalResult.results.map(r => r.meetingId.toString()));
 
-      this.logger.info('Cross-meeting semantic search completed', {
+      this.logger.info('Cross-meeting search completed', {
         projectId,
         resultCount: retrievalResult.results.length,
-        meetingsSearched: uniqueMeetings.size
+        meetingsSearched: uniqueMeetings.size,
+        strategy: retrievalResult.metadata.strategy
       });
 
       return {
@@ -165,88 +174,13 @@ class SemanticSearchService {
           limit,
           total: retrievalResult.results.length
         },
-        searchType: 'semantic_cross_meeting',
+        searchType: hybrid ? 'hybrid_cross_meeting' : 'semantic_cross_meeting',
+        strategy: retrievalResult.metadata.strategy,
         meetingsSearched: uniqueMeetings.size
       };
     } catch (error) {
-      this.logger.error('Cross-meeting semantic search failed', {
+      this.logger.error('Cross-meeting search failed', {
         projectId,
-        query,
-        error: error.message
-      });
-      throw error;
-    }
-  }
-
-  /**
-   * Hybrid search combining semantic and keyword search
-   * @param {string} meetingId - Meeting ID to search within
-   * @param {string} query - Search query text
-   * @param {Object} options - Search options
-   * @returns {Promise<Object>} Merged search results
-   */
-  async searchHybrid(meetingId, query, options = {}) {
-    const { page = 1, limit = 20 } = options;
-
-    try {
-      this.logger.info('Performing hybrid search', { meetingId, query });
-
-      // Run both searches in parallel (if embedding is enabled)
-      let semanticResults = null;
-      let keywordResults = null;
-
-      if (this.embeddingService.isEnabled()) {
-        [semanticResults, keywordResults] = await Promise.all([
-          this.searchSingleMeeting(meetingId, query, {
-            ...options,
-            limit: Math.ceil(limit / 2)
-          }).catch(error => {
-            this.logger.warn('Semantic search failed in hybrid mode', { error: error.message });
-            return null;
-          }),
-          this.transcriptionDataService.searchTranscriptions(meetingId, query, {
-            page,
-            limit: Math.ceil(limit / 2)
-          })
-        ]);
-      } else {
-        // Fall back to keyword-only search
-        keywordResults = await this.transcriptionDataService.searchTranscriptions(meetingId, query, {
-          page,
-          limit
-        });
-      }
-
-      // Merge results using Reciprocal Rank Fusion
-      const mergedResults = this._fuseResults(
-        semanticResults?.transcriptions || [],
-        keywordResults?.transcriptions || [],
-        limit
-      );
-
-      this.logger.info('Hybrid search completed', {
-        meetingId,
-        semanticCount: semanticResults?.transcriptions?.length || 0,
-        keywordCount: keywordResults?.transcriptions?.length || 0,
-        mergedCount: mergedResults.length
-      });
-
-      return {
-        transcriptions: mergedResults,
-        pagination: {
-          page,
-          limit,
-          total: mergedResults.length
-        },
-        searchType: 'hybrid',
-        components: {
-          semantic: semanticResults?.transcriptions?.length || 0,
-          keyword: keywordResults?.transcriptions?.length || 0
-        }
-      };
-    } catch (error) {
-      this.logger.error('Hybrid search failed', {
-        meetingId,
         query,
         error: error.message
       });
@@ -284,48 +218,15 @@ class SemanticSearchService {
         speaker: result.speaker,
         text: result.text,
         isEdited: result.isEdited,
-        score: result.score
+        score: result.score,
+        vectorScore: result.vectorScore,
+        textScore: result.textScore,
+        combinedScore: result.combinedScore
       });
     });
 
     // Convert to array and sort by top score
     return Object.values(grouped).sort((a, b) => b.topScore - a.topScore);
-  }
-
-  /**
-   * Merge results using Reciprocal Rank Fusion (RRF)
-   * @private
-   */
-  _fuseResults(semanticResults, keywordResults, limit) {
-    const k = 60; // RRF constant
-    const scores = new Map();
-
-    // Score semantic results
-    semanticResults.forEach((result, index) => {
-      const id = result._id.toString();
-      const score = 1 / (k + index + 1);
-      scores.set(id, { ...result, fusionScore: score, source: 'semantic' });
-    });
-
-    // Add keyword results
-    keywordResults.forEach((result, index) => {
-      const id = result._id.toString();
-      const score = 1 / (k + index + 1);
-
-      if (scores.has(id)) {
-        // Combine scores if result appears in both
-        const existing = scores.get(id);
-        existing.fusionScore += score;
-        existing.source = 'both';
-      } else {
-        scores.set(id, { ...result, fusionScore: score, source: 'keyword' });
-      }
-    });
-
-    // Sort by fusion score and limit
-    return Array.from(scores.values())
-      .sort((a, b) => b.fusionScore - a.fusionScore)
-      .slice(0, limit);
   }
 }
 

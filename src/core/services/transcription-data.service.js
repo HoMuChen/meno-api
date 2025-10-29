@@ -260,43 +260,6 @@ class TranscriptionDataService extends BaseService {
   }
 
   /**
-   * Search transcriptions by text
-   * @param {string} meetingId - Meeting ID
-   * @param {string} searchText - Search query
-   * @param {Object} options - Pagination options
-   * @returns {Promise<Object>} Matching transcriptions
-   */
-  async searchTranscriptions(meetingId, searchText, options = {}) {
-    try {
-      const {
-        page = 1,
-        limit = 50,
-        sort = 'startTime'
-      } = options;
-
-      const query = {
-        meetingId,
-        text: { $regex: searchText, $options: 'i' }
-      };
-
-      const result = await Transcription.findPaginated(
-        query,
-        { page: parseInt(page), limit: parseInt(limit), sort }
-      );
-
-      this.logSuccess('Transcriptions searched', {
-        meetingId,
-        searchText,
-        resultsCount: result.transcriptions.length
-      });
-
-      return result;
-    } catch (error) {
-      this.logAndThrow(error, 'Search transcriptions', { meetingId, searchText });
-    }
-  }
-
-  /**
    * Get transcriptions by speaker
    * @param {string} meetingId - Meeting ID
    * @param {string} speaker - Speaker name

@@ -60,27 +60,7 @@ class TranscriptionController extends BaseController {
     return this.sendSuccess(res, deletedTranscription, 'Transcription deleted successfully');
   });
 
-    /**
-   * search
-   */
-  search = this.asyncHandler(async (req, res) => {
-    const { meetingId } = req.params;
-    const { q, page, limit } = req.query;
-
-    if (!q) {
-      throw new BadRequestError('Search query is required');
-    }
-
-    // Meeting ownership already verified by middleware (req.meeting available)
-    const result = await this.transcriptionDataService.searchTranscriptions(meetingId, q, {
-      page,
-      limit
-    });
-
-    return this.sendSuccess(res, result);
-  });
-
-    /**
+  /**
    * Get BySpeaker
    */
   getBySpeaker = this.asyncHandler(async (req, res) => {
@@ -135,35 +115,12 @@ class TranscriptionController extends BaseController {
   });
 
   /**
-   * Semantic search
-   * Vector-based semantic search within a single meeting
-   */
-  semanticSearch = this.asyncHandler(async (req, res) => {
-    const { meetingId } = req.params;
-    const { q, page, limit, scoreThreshold, speaker } = req.query;
-
-    if (!q) {
-      throw new BadRequestError('Search query is required');
-    }
-
-    // Meeting ownership already verified by middleware (req.meeting available)
-    const result = await this.semanticSearchService.searchSingleMeeting(meetingId, q, {
-      page: page ? parseInt(page) : undefined,
-      limit: limit ? parseInt(limit) : undefined,
-      scoreThreshold: scoreThreshold ? parseFloat(scoreThreshold) : undefined,
-      speaker
-    });
-
-    return this.sendSuccess(res, result);
-  });
-
-  /**
    * Search across meetings
-   * Semantic search across all meetings in a project
+   * Hybrid search across all meetings in a project
    */
   searchAcrossMeetings = this.asyncHandler(async (req, res) => {
     const { projectId } = req.params;
-    const { q, page, limit, scoreThreshold, from, to, speaker, groupByMeeting } = req.query;
+    const { q, page, limit, scoreThreshold, from, to, speaker, groupByMeeting, hybrid } = req.query;
 
     if (!q) {
       throw new BadRequestError('Search query is required');
@@ -188,7 +145,8 @@ class TranscriptionController extends BaseController {
       from,
       to,
       speaker,
-      groupByMeeting: groupByMeeting !== 'false' // Default to true
+      groupByMeeting: groupByMeeting !== 'false', // Default to true
+      hybrid: hybrid !== 'false' // Default to true (hybrid search)
     });
 
     return this.sendSuccess(res, result);

@@ -2,6 +2,7 @@
  * Retrieval Service
  * Core service for semantic retrieval over transcriptions
  * Supports meeting-scoped and project-scoped search
+ * Implements two-stage hybrid retrieval: vector search + Atlas Search reranking
  * Designed to be reused by search APIs and future RAG/chat features
  */
 const mongoose = require('mongoose');
@@ -13,10 +14,11 @@ class RetrievalService extends BaseService {
   constructor(logger, embeddingService) {
     super(logger);
     this.embeddingService = embeddingService;
+    this.atlasSearchAvailable = null; // Cached detection result
   }
 
   /**
-   * Retrieve relevant transcriptions using semantic search
+   * Retrieve relevant transcriptions using semantic or hybrid search
    * @param {string} query - Search query text
    * @param {Object} options - Retrieval options
    * @param {string} options.scope - 'meeting' or 'project'
@@ -26,6 +28,8 @@ class RetrievalService extends BaseService {
    * @param {number} options.scoreThreshold - Minimum similarity score (default: 0.7)
    * @param {number} options.page - Page number for pagination (default: 1)
    * @param {boolean} options.includeMeetingInfo - Include meeting details in results (default: false)
+   * @param {boolean} options.hybrid - Use two-stage hybrid retrieval (default: true)
+   * @param {number} options.candidateMultiplier - Multiplier for stage 1 candidates in hybrid mode (default: 5)
    * @returns {Promise<Object>} Retrieval results with transcriptions and metadata
    */
   async retrieve(query, options = {}) {
@@ -36,7 +40,9 @@ class RetrievalService extends BaseService {
       topK = 20,
       scoreThreshold = 0.7,
       page = 1,
-      includeMeetingInfo = false
+      includeMeetingInfo = false,
+      hybrid = true,
+      candidateMultiplier = 5
     } = options;
 
     // Validate inputs
@@ -59,12 +65,17 @@ class RetrievalService extends BaseService {
     }
 
     try {
+      // Determine retrieval strategy
+      const useHybrid = hybrid && await this._checkAtlasSearchAvailability();
+      const strategy = useHybrid ? 'two-stage-hybrid' : 'semantic-only';
+
       this.logger.info('Starting retrieval', {
         scope,
         scopeId,
         query: query.substring(0, 50),
         topK,
-        scoreThreshold
+        scoreThreshold,
+        strategy
       });
 
       // Generate query embedding
@@ -77,22 +88,41 @@ class RetrievalService extends BaseService {
       // Build filter based on scope
       const matchFilter = await this._buildScopeFilter(scope, scopeId, filters);
 
-      // Build and execute vector search pipeline
-      const pipeline = this._buildVectorSearchPipeline(
-        queryEmbedding,
-        matchFilter,
-        scoreThreshold,
-        topK,
-        page,
-        includeMeetingInfo
-      );
-
-      const results = await Transcription.aggregate(pipeline);
+      // Execute appropriate retrieval strategy
+      let results;
+      if (useHybrid) {
+        // Two-stage hybrid retrieval (separate queries due to MongoDB limitation)
+        results = await this._executeTwoStageRetrieval(
+          query,
+          queryEmbedding,
+          matchFilter,
+          scoreThreshold,
+          topK,
+          page,
+          includeMeetingInfo,
+          candidateMultiplier
+        );
+      } else {
+        // Fallback to semantic-only if hybrid not available
+        if (hybrid) {
+          this.logger.warn('Hybrid search requested but Atlas Search unavailable, falling back to semantic-only');
+        }
+        const pipeline = this._buildVectorSearchPipeline(
+          queryEmbedding,
+          matchFilter,
+          scoreThreshold,
+          topK,
+          page,
+          includeMeetingInfo
+        );
+        results = await Transcription.aggregate(pipeline);
+      }
 
       this.logger.info('Retrieval completed', {
         scope,
         scopeId,
-        resultCount: results.length
+        resultCount: results.length,
+        strategy
       });
 
       return {
@@ -104,7 +134,8 @@ class RetrievalService extends BaseService {
           topK,
           scoreThreshold,
           page,
-          resultCount: results.length
+          resultCount: results.length,
+          strategy
         }
       };
     } catch (error) {
@@ -253,6 +284,217 @@ class RetrievalService extends BaseService {
     );
 
     return pipeline;
+  }
+
+  /**
+   * Execute two-stage hybrid retrieval
+   * Stage 1: Vector search for semantic similarity (get top N candidates)
+   * Stage 2: Atlas Search for keyword reranking on those candidates
+   *
+   * Note: MongoDB doesn't allow $search after $vectorSearch in same pipeline,
+   * so we run two separate queries and combine results
+   * @private
+   */
+  async _executeTwoStageRetrieval(
+    query,
+    queryEmbedding,
+    matchFilter,
+    scoreThreshold,
+    topK,
+    page,
+    includeMeetingInfo,
+    candidateMultiplier
+  ) {
+    const numCandidates = topK * candidateMultiplier * 2;
+    const stage1Limit = topK * candidateMultiplier;
+
+    // STAGE 1: Vector search to get candidate IDs
+    const vectorPipeline = [
+      {
+        $vectorSearch: {
+          index: 'transcription_vector_index',
+          path: 'embedding',
+          queryVector: queryEmbedding,
+          numCandidates: numCandidates,
+          limit: stage1Limit,
+          filter: matchFilter
+        }
+      },
+      {
+        $addFields: {
+          vectorScore: { $meta: 'vectorSearchScore' }
+        }
+      },
+      {
+        $project: {
+          _id: 1,
+          vectorScore: 1
+        }
+      }
+    ];
+
+    const vectorResults = await Transcription.aggregate(vectorPipeline);
+
+    if (vectorResults.length === 0) {
+      return [];
+    }
+
+    // Extract candidate IDs and create vector score map
+    const candidateIds = vectorResults.map(r => r._id);
+    const vectorScoreMap = new Map(vectorResults.map(r => [r._id.toString(), r.vectorScore]));
+
+    // STAGE 2: Atlas Search on candidates only
+    const searchPipeline = [
+      {
+        $search: {
+          index: 'transcription_text_index',
+          compound: {
+            must: [
+              {
+                text: {
+                  query: query,
+                  path: 'text'
+                }
+              }
+            ],
+            filter: [
+              {
+                in: {
+                  path: '_id',
+                  value: candidateIds
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        $addFields: {
+          textScore: { $meta: 'searchScore' }
+        }
+      },
+      {
+        $match: matchFilter
+      }
+    ];
+
+    // Add meeting info if requested
+    if (includeMeetingInfo) {
+      searchPipeline.push(
+        {
+          $lookup: {
+            from: 'meetings',
+            localField: 'meetingId',
+            foreignField: '_id',
+            as: 'meeting'
+          }
+        },
+        {
+          $unwind: '$meeting'
+        }
+      );
+    }
+
+    // Project fields
+    const projection = {
+      _id: 1,
+      meetingId: 1,
+      startTime: 1,
+      endTime: 1,
+      speaker: 1,
+      text: 1,
+      isEdited: 1,
+      createdAt: 1,
+      textScore: 1
+    };
+
+    if (includeMeetingInfo) {
+      projection['meeting.title'] = 1;
+      projection['meeting.createdAt'] = 1;
+    }
+
+    searchPipeline.push({
+      $project: projection
+    });
+
+    const searchResults = await Transcription.aggregate(searchPipeline);
+
+    // Combine scores: 60% semantic + 40% keyword
+    const combinedResults = searchResults.map(result => {
+      const vectorScore = vectorScoreMap.get(result._id.toString()) || 0;
+      const textScore = result.textScore || 0;
+      const combinedScore = vectorScore * 0.6 + textScore * 0.4;
+
+      return {
+        ...result,
+        vectorScore,
+        combinedScore,
+        score: combinedScore
+      };
+    });
+
+    // Sort by combined score and apply threshold
+    const filteredResults = combinedResults
+      .filter(r => r.combinedScore >= scoreThreshold)
+      .sort((a, b) => b.combinedScore - a.combinedScore);
+
+    // Apply pagination
+    const startIdx = (page - 1) * topK;
+    const endIdx = startIdx + topK;
+    const paginatedResults = filteredResults.slice(startIdx, endIdx);
+
+    return paginatedResults;
+  }
+
+  /**
+   * Check if MongoDB Atlas Search is available
+   * Caches result to avoid repeated checks
+   * @private
+   */
+  async _checkAtlasSearchAvailability() {
+    // Return cached result if available
+    if (this.atlasSearchAvailable !== null) {
+      return this.atlasSearchAvailable;
+    }
+
+    try {
+      // Test if collection supports $search operator
+      // Note: Must use $limit: 1 (minimum), not 0, as Atlas Search requires positive limit
+      await Transcription.aggregate([
+        {
+          $search: {
+            index: 'transcription_text_index',
+            text: {
+              query: 'test',
+              path: 'text'
+            }
+          }
+        },
+        { $limit: 1 }
+      ]);
+
+      this.atlasSearchAvailable = true;
+      this.logger.info('Atlas Search detected and available');
+      return true;
+    } catch (error) {
+      // Error code 40324: $search stage not available
+      // Error code 9: Index not found
+      if (error.code === 40324 || error.code === 9) {
+        this.atlasSearchAvailable = false;
+        this.logger.warn('Atlas Search not available or index not configured', {
+          error: error.message,
+          code: error.code
+        });
+        return false;
+      }
+
+      // Other errors should be logged but not cached
+      this.logger.error('Error checking Atlas Search availability', {
+        error: error.message,
+        code: error.code
+      });
+      return false;
+    }
   }
 
   /**
