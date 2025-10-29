@@ -2,16 +2,17 @@
  * Semantic Search Service
  * Vector-based semantic search over transcriptions using embeddings
  * Supports single-meeting search, cross-meeting search, and hybrid search
+ *
+ * Note: Core retrieval logic has been moved to RetrievalService
+ * This service now focuses on API-specific formatting and hybrid search
  */
-const mongoose = require('mongoose');
-const Transcription = require('../../models/transcription.model');
-const Meeting = require('../../models/meeting.model');
 
 class SemanticSearchService {
-  constructor(logger, embeddingService, transcriptionDataService) {
+  constructor(logger, embeddingService, transcriptionDataService, retrievalService) {
     this.logger = logger;
     this.embeddingService = embeddingService;
     this.transcriptionDataService = transcriptionDataService;
+    this.retrievalService = retrievalService;
   }
 
   /**
@@ -29,12 +30,6 @@ class SemanticSearchService {
       speaker = null
     } = options;
 
-    // Check if embedding service is enabled
-    if (!this.embeddingService.isEnabled()) {
-      this.logger.warn('Semantic search requested but embedding service is disabled');
-      throw new Error('Semantic search is not available. Please configure OPENAI_API_KEY.');
-    }
-
     try {
       this.logger.info('Performing semantic search', {
         meetingId,
@@ -44,80 +39,34 @@ class SemanticSearchService {
         scoreThreshold
       });
 
-      // Generate query embedding
-      const queryEmbedding = await this.embeddingService.generateEmbedding(query);
-
-      if (!queryEmbedding) {
-        throw new Error('Failed to generate query embedding');
-      }
-
-      // Build match filter
-      const matchFilter = { meetingId: new mongoose.Types.ObjectId(meetingId) };
+      // Delegate to RetrievalService
+      const filters = {};
       if (speaker) {
-        matchFilter.speaker = speaker;
+        filters.speaker = speaker;
       }
 
-      // Perform vector search using MongoDB aggregation
-      const numCandidates = Math.min(limit * 10, 200);
-
-      const pipeline = [
-        {
-          $vectorSearch: {
-            index: 'transcription_vector_index',
-            path: 'embedding',
-            queryVector: queryEmbedding,
-            numCandidates: numCandidates,
-            limit: limit * 2, // Get more candidates for scoring
-            filter: matchFilter
-          }
-        },
-        {
-          $addFields: {
-            score: { $meta: 'vectorSearchScore' }
-          }
-        },
-        {
-          $match: {
-            score: { $gte: scoreThreshold }
-          }
-        },
-        {
-          $sort: { score: -1 }
-        },
-        {
-          $skip: (page - 1) * limit
-        },
-        {
-          $limit: limit
-        },
-        {
-          $project: {
-            _id: 1,
-            meetingId: 1,
-            startTime: 1,
-            endTime: 1,
-            speaker: 1,
-            text: 1,
-            isEdited: 1,
-            createdAt: 1,
-            score: 1
-          }
-        }
-      ];
-
-      const results = await Transcription.aggregate(pipeline);
+      const retrievalResult = await this.retrievalService.retrieve(query, {
+        scope: 'meeting',
+        scopeId: meetingId,
+        filters,
+        topK: limit,
+        scoreThreshold,
+        page,
+        includeMeetingInfo: false
+      });
 
       this.logger.info('Semantic search completed', {
         meetingId,
-        resultCount: results.length
+        resultCount: retrievalResult.results.length
       });
 
+      // Format response to match existing API
       return {
-        transcriptions: results,
+        transcriptions: retrievalResult.results,
         pagination: {
           page,
           limit,
-          total: results.length
+          total: retrievalResult.results.length
         },
         searchType: 'semantic'
       };
@@ -149,12 +98,6 @@ class SemanticSearchService {
       groupByMeeting = true
     } = options;
 
-    // Check if embedding service is enabled
-    if (!this.embeddingService.isEnabled()) {
-      this.logger.warn('Semantic search requested but embedding service is disabled');
-      throw new Error('Semantic search is not available. Please configure OPENAI_API_KEY.');
-    }
-
     try {
       this.logger.info('Performing cross-meeting semantic search', {
         projectId,
@@ -165,114 +108,54 @@ class SemanticSearchService {
         groupByMeeting
       });
 
-      // Get all meeting IDs for this project
-      const meetingQuery = { projectId: new mongoose.Types.ObjectId(projectId) };
-
-      if (from || to) {
-        meetingQuery.createdAt = {};
-        if (from) meetingQuery.createdAt.$gte = new Date(from);
-        if (to) meetingQuery.createdAt.$lte = new Date(to);
+      // Build filters
+      const filters = {};
+      if (speaker) {
+        filters.speaker = speaker;
+      }
+      if (from) {
+        filters.from = from;
+      }
+      if (to) {
+        filters.to = to;
       }
 
-      const meetings = await Meeting.find(meetingQuery, '_id title createdAt').lean();
-      const meetingIds = meetings.map(m => m._id);
+      // Delegate to RetrievalService
+      const retrievalResult = await this.retrievalService.retrieve(query, {
+        scope: 'project',
+        scopeId: projectId,
+        filters,
+        topK: limit,
+        scoreThreshold,
+        page,
+        includeMeetingInfo: true // Include meeting info for grouping
+      });
 
-      if (meetingIds.length === 0) {
+      // Check if we found any results
+      if (retrievalResult.results.length === 0) {
         return {
           results: [],
           pagination: { page, limit, total: 0 },
-          searchType: 'semantic_cross_meeting'
+          searchType: 'semantic_cross_meeting',
+          meetingsSearched: 0
         };
       }
-
-      // Generate query embedding
-      const queryEmbedding = await this.embeddingService.generateEmbedding(query);
-
-      if (!queryEmbedding) {
-        throw new Error('Failed to generate query embedding');
-      }
-
-      // Build match filter
-      const matchFilter = { meetingId: { $in: meetingIds } };
-      if (speaker) {
-        matchFilter.speaker = speaker;
-      }
-
-      // Perform vector search across all meetings
-      const numCandidates = Math.min(limit * 10, 200);
-
-      const pipeline = [
-        {
-          $vectorSearch: {
-            index: 'transcription_vector_index',
-            path: 'embedding',
-            queryVector: queryEmbedding,
-            numCandidates: numCandidates,
-            limit: limit * 2,
-            filter: matchFilter
-          }
-        },
-        {
-          $addFields: {
-            score: { $meta: 'vectorSearchScore' }
-          }
-        },
-        {
-          $match: {
-            score: { $gte: scoreThreshold }
-          }
-        },
-        {
-          $lookup: {
-            from: 'meetings',
-            localField: 'meetingId',
-            foreignField: '_id',
-            as: 'meeting'
-          }
-        },
-        {
-          $unwind: '$meeting'
-        },
-        {
-          $project: {
-            _id: 1,
-            meetingId: 1,
-            startTime: 1,
-            endTime: 1,
-            speaker: 1,
-            text: 1,
-            isEdited: 1,
-            createdAt: 1,
-            score: 1,
-            'meeting.title': 1,
-            'meeting.createdAt': 1
-          }
-        },
-        {
-          $sort: { score: -1 }
-        },
-        {
-          $skip: (page - 1) * limit
-        },
-        {
-          $limit: limit
-        }
-      ];
-
-      const results = await Transcription.aggregate(pipeline);
 
       // Group by meeting if requested
       let formattedResults;
       if (groupByMeeting) {
-        formattedResults = this._groupByMeeting(results);
+        formattedResults = this._groupByMeeting(retrievalResult.results);
       } else {
-        formattedResults = results;
+        formattedResults = retrievalResult.results;
       }
+
+      // Count unique meetings
+      const uniqueMeetings = new Set(retrievalResult.results.map(r => r.meetingId.toString()));
 
       this.logger.info('Cross-meeting semantic search completed', {
         projectId,
-        resultCount: results.length,
-        meetingsSearched: meetingIds.length
+        resultCount: retrievalResult.results.length,
+        meetingsSearched: uniqueMeetings.size
       });
 
       return {
@@ -280,10 +163,10 @@ class SemanticSearchService {
         pagination: {
           page,
           limit,
-          total: results.length
+          total: retrievalResult.results.length
         },
         searchType: 'semantic_cross_meeting',
-        meetingsSearched: meetingIds.length
+        meetingsSearched: uniqueMeetings.size
       };
     } catch (error) {
       this.logger.error('Cross-meeting semantic search failed', {

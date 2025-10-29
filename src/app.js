@@ -22,6 +22,7 @@ const MeetingService = require('./core/services/meeting.service');
 const TranscriptionDataService = require('./core/services/transcription-data.service');
 const TranscriptionServiceFactory = require('./core/services/transcription-service.factory');
 const EmbeddingService = require('./core/services/embedding.service');
+const RetrievalService = require('./core/services/retrieval.service');
 const SemanticSearchService = require('./core/services/semantic-search.service');
 const UserController = require('./api/controllers/user.controller');
 const FileController = require('./api/controllers/file.controller');
@@ -79,11 +80,15 @@ const createApp = () => {
   // Initialize transcription data service with embedding support
   const transcriptionDataService = new TranscriptionDataService(logger, embeddingService);
 
-  // Initialize semantic search service
+  // Initialize retrieval service (core search logic)
+  const retrievalService = new RetrievalService(logger, embeddingService);
+
+  // Initialize semantic search service (API-specific formatting)
   const semanticSearchService = new SemanticSearchService(
     logger,
     embeddingService,
-    transcriptionDataService
+    transcriptionDataService,
+    retrievalService
   );
 
   // Initialize meeting service first (needed for transcription factory)

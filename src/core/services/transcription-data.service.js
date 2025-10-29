@@ -142,12 +142,44 @@ class TranscriptionDataService extends BaseService {
         throw new Error('Transcription not found');
       }
 
+      let textChanged = false;
+
       // Allow updating speaker and text
       if (updates.speaker !== undefined) {
         transcription.speaker = updates.speaker;
       }
       if (updates.text !== undefined) {
+        const oldText = transcription.text;
         transcription.text = updates.text;
+        textChanged = oldText !== updates.text;
+      }
+
+      // Regenerate embedding if text changed and embedding service is enabled
+      if (textChanged && this.embeddingService && this.embeddingService.isEnabled()) {
+        try {
+          this.logger.info('Regenerating embedding for edited transcription', {
+            transcriptionId
+          });
+
+          const newEmbedding = await this.embeddingService.generateEmbedding(transcription.text);
+
+          if (newEmbedding) {
+            transcription.embedding = newEmbedding;
+            this.logger.info('Embedding regenerated successfully', {
+              transcriptionId
+            });
+          } else {
+            this.logger.warn('Failed to regenerate embedding for edited transcription', {
+              transcriptionId
+            });
+          }
+        } catch (embeddingError) {
+          // Log error but don't fail the update
+          this.logger.error('Error regenerating embedding', {
+            transcriptionId,
+            error: embeddingError.message
+          });
+        }
       }
 
       // Mark as edited
@@ -155,7 +187,8 @@ class TranscriptionDataService extends BaseService {
 
       this.logSuccess('Transcription updated', {
         transcriptionId,
-        isEdited: transcription.isEdited
+        isEdited: transcription.isEdited,
+        embeddingRegenerated: textChanged && transcription.embedding !== undefined
       });
 
       return transcription.toSafeObject();
