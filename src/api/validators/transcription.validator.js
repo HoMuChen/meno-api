@@ -94,8 +94,19 @@ const validatePagination = (req, res, next) => {
   next();
 };
 
+const bulkAssignSpeakerSchema = Joi.object({
+  personId: Joi.string()
+    .regex(/^[0-9a-fA-F]{24}$/)
+    .required()
+    .messages({
+      'string.pattern.base': 'Person ID must be a valid MongoDB ObjectId',
+      'any.required': 'Person ID is required'
+    })
+});
+
 module.exports = {
   validateUpdateTranscription: validate(updateTranscriptionSchema),
   validateSearchQuery,
-  validatePagination
+  validatePagination,
+  validateBulkAssignSpeaker: validate(bulkAssignSpeakerSchema)
 };

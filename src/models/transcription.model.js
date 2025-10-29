@@ -32,6 +32,9 @@ const mongoose = require('mongoose');
  *         speaker:
  *           type: string
  *           description: Speaker identifier (e.g., "Speaker 1", "John Doe")
+ *         personId:
+ *           type: string
+ *           description: Optional person ID if speaker is assigned to a person
  *         text:
  *           type: string
  *           description: Transcribed text segment
@@ -73,6 +76,12 @@ const transcriptionSchema = new mongoose.Schema(
       required: [true, 'Speaker is required'],
       trim: true,
       maxlength: [100, 'Speaker name cannot exceed 100 characters']
+    },
+    personId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Person',
+      default: null,
+      index: true
     },
     text: {
       type: String,

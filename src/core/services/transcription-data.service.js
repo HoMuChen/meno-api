@@ -295,6 +295,58 @@ class TranscriptionDataService extends BaseService {
       this.logAndThrow(error, 'Get transcriptions by speaker', { meetingId, speaker });
     }
   }
+
+  /**
+   * Batch update speaker assignment to a person
+   * Updates all transcriptions with matching speaker name to assign personId and update speaker display name
+   * @param {string} meetingId - Meeting ID
+   * @param {string} speakerName - Current speaker name to match (e.g., "Speaker 1")
+   * @param {string} personId - Person ID to assign
+   * @param {string} personName - Person's name for display
+   * @returns {Promise<Object>} Update result with counts
+   */
+  async bulkUpdateSpeakerAssignment(meetingId, speakerName, personId, personName) {
+    try {
+      const result = await Transcription.updateMany(
+        {
+          meetingId,
+          speaker: speakerName
+        },
+        {
+          $set: {
+            personId,
+            speaker: personName,
+            isEdited: true
+          }
+        }
+      );
+
+      this.logSuccess('Bulk speaker assignment completed', {
+        meetingId,
+        speakerName,
+        personId,
+        personName,
+        matchedCount: result.matchedCount,
+        modifiedCount: result.modifiedCount
+      });
+
+      return {
+        matchedCount: result.matchedCount,
+        modifiedCount: result.modifiedCount,
+        speaker: speakerName,
+        assignedTo: {
+          personId,
+          personName
+        }
+      };
+    } catch (error) {
+      this.logAndThrow(error, 'Bulk update speaker assignment', {
+        meetingId,
+        speakerName,
+        personId
+      });
+    }
+  }
 }
 
 module.exports = TranscriptionDataService;

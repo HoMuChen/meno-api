@@ -4,6 +4,7 @@
  */
 const BaseController = require('./base.controller');
 const { BadRequestError, ForbiddenError, NotFoundError } = require('../../utils/errors');
+const PersonService = require('../../core/services/person.service');
 
 class TranscriptionController extends BaseController {
   constructor(transcriptionDataService, semanticSearchService, projectService, logger) {
@@ -11,6 +12,7 @@ class TranscriptionController extends BaseController {
     this.transcriptionDataService = transcriptionDataService;
     this.semanticSearchService = semanticSearchService;
     this.projectService = projectService;
+    this.personService = new PersonService(logger);
   }
 
     /**
@@ -173,6 +175,39 @@ class TranscriptionController extends BaseController {
     });
 
     return this.sendSuccess(res, result);
+  });
+
+  /**
+   * Bulk assign speaker to person
+   * Updates all transcriptions with matching speaker name to a person
+   */
+  bulkAssignSpeaker = this.asyncHandler(async (req, res) => {
+    const { meetingId, speaker } = req.params;
+    const { personId } = req.body;
+    const userId = req.user.id;
+
+    // Meeting ownership already verified by middleware (req.meeting available)
+
+    // Verify person exists and belongs to user
+    const person = await this.personService.getPersonById(personId, userId);
+
+    if (!person) {
+      throw new NotFoundError('Person not found or does not belong to you');
+    }
+
+    // Perform bulk update
+    const result = await this.transcriptionDataService.bulkUpdateSpeakerAssignment(
+      meetingId,
+      speaker,
+      personId,
+      person.name
+    );
+
+    return this.sendSuccess(
+      res,
+      result,
+      `Successfully assigned ${result.modifiedCount} transcription(s) to ${person.name}`
+    );
   });
 }
 

@@ -8,7 +8,8 @@ const { requireMeetingOwnershipForTranscription } = require('../middleware/autho
 const {
   validateUpdateTranscription,
   validateSearchQuery,
-  validatePagination
+  validatePagination,
+  validateBulkAssignSpeaker
 } = require('../validators/transcription.validator');
 
 const createTranscriptionRoutes = (transcriptionController) => {
@@ -316,6 +317,81 @@ const createTranscriptionRoutes = (transcriptionController) => {
    *         description: Transcription not found
    */
   router.delete('/:id', transcriptionController.delete);
+
+  /**
+   * @swagger
+   * /api/meetings/{meetingId}/transcriptions/speaker/{speaker}/assign:
+   *   put:
+   *     summary: Batch assign speaker to person
+   *     description: Assign all transcriptions with a specific speaker name to a person
+   *     tags: [Transcriptions]
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: meetingId
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: Meeting ID
+   *       - in: path
+   *         name: speaker
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: Speaker name to assign (e.g., "Speaker 1")
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required:
+   *               - personId
+   *             properties:
+   *               personId:
+   *                 type: string
+   *                 description: Person ID to assign the speaker to
+   *                 example: "507f1f77bcf86cd799439011"
+   *     responses:
+   *       200:
+   *         description: Speaker assigned successfully
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                 data:
+   *                   type: object
+   *                   properties:
+   *                     matchedCount:
+   *                       type: number
+   *                       description: Number of transcriptions matched
+   *                     modifiedCount:
+   *                       type: number
+   *                       description: Number of transcriptions updated
+   *                     speaker:
+   *                       type: string
+   *                       description: Original speaker name
+   *                     assignedTo:
+   *                       type: object
+   *                       properties:
+   *                         personId:
+   *                           type: string
+   *                         personName:
+   *                           type: string
+   *                 message:
+   *                   type: string
+   *       400:
+   *         description: Validation error
+   *       401:
+   *         description: Unauthorized
+   *       404:
+   *         description: Meeting or person not found
+   */
+  router.put('/speaker/:speaker/assign', validateBulkAssignSpeaker, transcriptionController.bulkAssignSpeaker);
 
   return router;
 };
