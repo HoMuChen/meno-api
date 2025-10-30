@@ -184,9 +184,9 @@ class RetrievalService extends BaseService {
       }
     }
 
-    // Apply speaker filter if provided
-    if (additionalFilters.speaker) {
-      filter.speaker = additionalFilters.speaker;
+    // Apply personId filter if provided
+    if (additionalFilters.personId) {
+      filter.personId = new mongoose.Types.ObjectId(additionalFilters.personId);
     }
 
     return filter;

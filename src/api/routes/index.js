@@ -92,10 +92,10 @@ const createRoutes = (controllers, audioStorageProvider) => {
    *           format: date
    *         description: Filter meetings created before this date (ISO 8601)
    *       - in: query
-   *         name: speaker
+   *         name: personId
    *         schema:
    *           type: string
-   *         description: Filter by speaker name
+   *         description: Filter by person ID
    *       - in: query
    *         name: groupByMeeting
    *         schema:

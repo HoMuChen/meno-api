@@ -260,13 +260,13 @@ class TranscriptionDataService extends BaseService {
   }
 
   /**
-   * Get transcriptions by speaker
+   * Get transcriptions by person
    * @param {string} meetingId - Meeting ID
-   * @param {string} speaker - Speaker name
+   * @param {string} personId - Person ID
    * @param {Object} options - Pagination options
-   * @returns {Promise<Object>} Speaker's transcriptions
+   * @returns {Promise<Object>} Person's transcriptions
    */
-  async getTranscriptionsBySpeaker(meetingId, speaker, options = {}) {
+  async getTranscriptionsByPerson(meetingId, personId, options = {}) {
     try {
       const {
         page = 1,
@@ -276,7 +276,7 @@ class TranscriptionDataService extends BaseService {
 
       const query = {
         meetingId,
-        speaker
+        personId
       };
 
       const result = await Transcription.findPaginated(
@@ -284,15 +284,15 @@ class TranscriptionDataService extends BaseService {
         { page: parseInt(page), limit: parseInt(limit), sort }
       );
 
-      this.logSuccess('Transcriptions by speaker retrieved', {
+      this.logSuccess('Transcriptions by person retrieved', {
         meetingId,
-        speaker,
+        personId,
         count: result.transcriptions.length
       });
 
       return result;
     } catch (error) {
-      this.logAndThrow(error, 'Get transcriptions by speaker', { meetingId, speaker });
+      this.logAndThrow(error, 'Get transcriptions by person', { meetingId, personId });
     }
   }
 

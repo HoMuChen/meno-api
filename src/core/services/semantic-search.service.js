@@ -27,7 +27,7 @@ class SemanticSearchService {
       page = 1,
       limit = 20,
       scoreThreshold = 0.7,
-      speaker = null
+      personId = null
     } = options;
 
     try {
@@ -41,8 +41,8 @@ class SemanticSearchService {
 
       // Build filters
       const filters = {};
-      if (speaker) {
-        filters.speaker = speaker;
+      if (personId) {
+        filters.personId = personId;
       }
 
       // Use two-stage hybrid retrieval
@@ -98,7 +98,7 @@ class SemanticSearchService {
       scoreThreshold = 0.7,
       from = null,
       to = null,
-      speaker = null,
+      personId = null,
       groupByMeeting = true,
       hybrid = true
     } = options;
@@ -116,8 +116,8 @@ class SemanticSearchService {
 
       // Build filters
       const filters = {};
-      if (speaker) {
-        filters.speaker = speaker;
+      if (personId) {
+        filters.personId = personId;
       }
       if (from) {
         filters.from = from;

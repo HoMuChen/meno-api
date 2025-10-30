@@ -113,10 +113,10 @@ const createTranscriptionRoutes = (transcriptionController) => {
    *           default: 0.7
    *         description: Minimum combined similarity score (0-1)
    *       - in: query
-   *         name: speaker
+   *         name: personId
    *         schema:
    *           type: string
-   *         description: Filter by speaker name
+   *         description: Filter by person ID
    *     responses:
    *       200:
    *         description: Hybrid search results retrieved successfully with combined scores
@@ -131,10 +131,10 @@ const createTranscriptionRoutes = (transcriptionController) => {
 
   /**
    * @swagger
-   * /api/meetings/{meetingId}/transcriptions/speaker/{speaker}:
+   * /api/meetings/{meetingId}/transcriptions/person/{personId}:
    *   get:
-   *     summary: Get transcriptions by speaker
-   *     description: Filter transcriptions by speaker name
+   *     summary: Get transcriptions by person
+   *     description: Filter transcriptions by person ID
    *     tags: [Transcriptions]
    *     security:
    *       - bearerAuth: []
@@ -146,20 +146,20 @@ const createTranscriptionRoutes = (transcriptionController) => {
    *           type: string
    *         description: Meeting ID
    *       - in: path
-   *         name: speaker
+   *         name: personId
    *         required: true
    *         schema:
    *           type: string
-   *         description: Speaker name
+   *         description: Person ID
    *     responses:
    *       200:
-   *         description: Speaker transcriptions retrieved successfully
+   *         description: Person transcriptions retrieved successfully
    *       401:
    *         description: Unauthorized
    *       404:
    *         description: Meeting not found
    */
-  router.get('/speaker/:speaker', transcriptionController.getBySpeaker);
+  router.get('/person/:personId', transcriptionController.getByPerson);
 
   /**
    * @swagger

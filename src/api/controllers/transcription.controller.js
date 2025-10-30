@@ -63,14 +63,14 @@ class TranscriptionController extends BaseController {
   });
 
   /**
-   * Get BySpeaker
+   * Get ByPerson
    */
-  getBySpeaker = this.asyncHandler(async (req, res) => {
-    const { meetingId, speaker } = req.params;
+  getByPerson = this.asyncHandler(async (req, res) => {
+    const { meetingId, personId } = req.params;
     const { page, limit } = req.query;
 
     // Meeting ownership already verified by middleware (req.meeting available)
-    const result = await this.transcriptionDataService.getTranscriptionsBySpeaker(meetingId, speaker, {
+    const result = await this.transcriptionDataService.getTranscriptionsByPerson(meetingId, personId, {
       page,
       limit
     });
@@ -122,7 +122,7 @@ class TranscriptionController extends BaseController {
    */
   searchAcrossMeetings = this.asyncHandler(async (req, res) => {
     const { projectId } = req.params;
-    const { q, page, limit, scoreThreshold, from, to, speaker, groupByMeeting, hybrid } = req.query;
+    const { q, page, limit, scoreThreshold, from, to, personId, groupByMeeting, hybrid } = req.query;
 
     if (!q) {
       throw new BadRequestError('Search query is required');
@@ -146,7 +146,7 @@ class TranscriptionController extends BaseController {
       scoreThreshold: scoreThreshold ? parseFloat(scoreThreshold) : undefined,
       from,
       to,
-      speaker,
+      personId,
       groupByMeeting: groupByMeeting !== 'false', // Default to true
       hybrid: hybrid !== 'false' // Default to true (hybrid search)
     });
@@ -160,7 +160,7 @@ class TranscriptionController extends BaseController {
    */
   hybridSearch = this.asyncHandler(async (req, res) => {
     const { meetingId } = req.params;
-    const { q, page, limit, scoreThreshold, speaker } = req.query;
+    const { q, page, limit, scoreThreshold, personId } = req.query;
 
     if (!q) {
       throw new BadRequestError('Search query is required');
@@ -171,7 +171,7 @@ class TranscriptionController extends BaseController {
       page: page ? parseInt(page) : undefined,
       limit: limit ? parseInt(limit) : undefined,
       scoreThreshold: scoreThreshold ? parseFloat(scoreThreshold) : undefined,
-      speaker
+      personId
     });
 
     return this.sendSuccess(res, result);
