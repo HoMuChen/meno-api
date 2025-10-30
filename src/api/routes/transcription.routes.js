@@ -9,7 +9,8 @@ const {
   validateUpdateTranscription,
   validateSearchQuery,
   validatePagination,
-  validateBulkAssignSpeaker
+  validateBulkAssignSpeaker,
+  validateBulkReassignPerson
 } = require('../validators/transcription.validator');
 
 const createTranscriptionRoutes = (transcriptionController) => {
@@ -392,6 +393,85 @@ const createTranscriptionRoutes = (transcriptionController) => {
    *         description: Meeting or person not found
    */
   router.put('/speaker/:speaker/assign', validateBulkAssignSpeaker, transcriptionController.bulkAssignSpeaker);
+
+  /**
+   * @swagger
+   * /api/meetings/{meetingId}/transcriptions/people/{personId}/assign:
+   *   put:
+   *     summary: Reassign person's transcriptions to another person
+   *     description: Reassign all transcriptions currently assigned to a person to a different person
+   *     tags: [Transcriptions]
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: meetingId
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: Meeting ID
+   *       - in: path
+   *         name: personId
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: Current person ID whose transcriptions will be reassigned
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required:
+   *               - newPersonId
+   *             properties:
+   *               newPersonId:
+   *                 type: string
+   *                 description: New person ID to reassign transcriptions to
+   *                 example: "507f1f77bcf86cd799439012"
+   *     responses:
+   *       200:
+   *         description: Transcriptions reassigned successfully
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                 data:
+   *                   type: object
+   *                   properties:
+   *                     matchedCount:
+   *                       type: number
+   *                       description: Number of transcriptions matched
+   *                     modifiedCount:
+   *                       type: number
+   *                       description: Number of transcriptions updated
+   *                     from:
+   *                       type: object
+   *                       properties:
+   *                         personId:
+   *                           type: string
+   *                         personName:
+   *                           type: string
+   *                     to:
+   *                       type: object
+   *                       properties:
+   *                         personId:
+   *                           type: string
+   *                         personName:
+   *                           type: string
+   *                 message:
+   *                   type: string
+   *       400:
+   *         description: Validation error
+   *       401:
+   *         description: Unauthorized
+   *       404:
+   *         description: Meeting or person not found
+   */
+  router.put('/people/:personId/assign', validateBulkReassignPerson, transcriptionController.bulkReassignPerson);
 
   return router;
 };

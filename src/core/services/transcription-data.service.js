@@ -347,6 +347,61 @@ class TranscriptionDataService extends BaseService {
       });
     }
   }
+
+  /**
+   * Batch reassign transcriptions from one person to another
+   * Updates all transcriptions assigned to currentPersonId to newPersonId
+   * @param {string} meetingId - Meeting ID
+   * @param {string} currentPersonId - Current person ID
+   * @param {string} currentPersonName - Current person's name
+   * @param {string} newPersonId - New person ID to reassign to
+   * @param {string} newPersonName - New person's name for display
+   * @returns {Promise<Object>} Update result with counts
+   */
+  async bulkReassignPerson(meetingId, currentPersonId, currentPersonName, newPersonId, newPersonName) {
+    try {
+      const result = await Transcription.updateMany(
+        {
+          meetingId,
+          personId: currentPersonId
+        },
+        {
+          $set: {
+            personId: newPersonId,
+            speaker: newPersonName,
+            isEdited: true
+          }
+        }
+      );
+
+      this.logSuccess('Bulk person reassignment completed', {
+        meetingId,
+        from: { personId: currentPersonId, personName: currentPersonName },
+        to: { personId: newPersonId, personName: newPersonName },
+        matchedCount: result.matchedCount,
+        modifiedCount: result.modifiedCount
+      });
+
+      return {
+        matchedCount: result.matchedCount,
+        modifiedCount: result.modifiedCount,
+        from: {
+          personId: currentPersonId,
+          personName: currentPersonName
+        },
+        to: {
+          personId: newPersonId,
+          personName: newPersonName
+        }
+      };
+    } catch (error) {
+      this.logAndThrow(error, 'Bulk reassign person', {
+        meetingId,
+        currentPersonId,
+        newPersonId
+      });
+    }
+  }
 }
 
 module.exports = TranscriptionDataService;

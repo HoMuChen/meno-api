@@ -209,6 +209,47 @@ class TranscriptionController extends BaseController {
       `Successfully assigned ${result.modifiedCount} transcription(s) to ${person.name}`
     );
   });
+
+  /**
+   * Bulk reassign person's transcriptions to another person
+   * Updates all transcriptions assigned to one person to be assigned to another
+   */
+  bulkReassignPerson = this.asyncHandler(async (req, res) => {
+    const { meetingId, personId } = req.params;
+    const { newPersonId } = req.body;
+    const userId = req.user.id;
+
+    // Meeting ownership already verified by middleware (req.meeting available)
+
+    // Verify current person exists and belongs to user
+    const currentPerson = await this.personService.getPersonById(personId, userId);
+
+    if (!currentPerson) {
+      throw new NotFoundError('Current person not found or does not belong to you');
+    }
+
+    // Verify new person exists and belongs to user
+    const newPerson = await this.personService.getPersonById(newPersonId, userId);
+
+    if (!newPerson) {
+      throw new NotFoundError('New person not found or does not belong to you');
+    }
+
+    // Perform bulk reassignment
+    const result = await this.transcriptionDataService.bulkReassignPerson(
+      meetingId,
+      personId,
+      currentPerson.name,
+      newPersonId,
+      newPerson.name
+    );
+
+    return this.sendSuccess(
+      res,
+      result,
+      `Successfully reassigned ${result.modifiedCount} transcription(s) from ${currentPerson.name} to ${newPerson.name}`
+    );
+  });
 }
 
 module.exports = TranscriptionController;

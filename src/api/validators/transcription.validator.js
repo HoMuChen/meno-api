@@ -104,9 +104,20 @@ const bulkAssignSpeakerSchema = Joi.object({
     })
 });
 
+const bulkReassignPersonSchema = Joi.object({
+  newPersonId: Joi.string()
+    .regex(/^[0-9a-fA-F]{24}$/)
+    .required()
+    .messages({
+      'string.pattern.base': 'New person ID must be a valid MongoDB ObjectId',
+      'any.required': 'New person ID is required'
+    })
+});
+
 module.exports = {
   validateUpdateTranscription: validate(updateTranscriptionSchema),
   validateSearchQuery,
   validatePagination,
-  validateBulkAssignSpeaker: validate(bulkAssignSpeakerSchema)
+  validateBulkAssignSpeaker: validate(bulkAssignSpeakerSchema),
+  validateBulkReassignPerson: validate(bulkReassignPersonSchema)
 };
