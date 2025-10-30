@@ -340,6 +340,9 @@ components:
         speaker:
           type: string
           description: Speaker identifier (e.g., "Speaker 1", "John Doe")
+        personId:
+          type: string
+          description: Optional person ID if speaker is assigned to a person
         text:
           type: string
           description: Transcribed text segment
@@ -839,10 +842,10 @@ paths:
             format: date
           description: Filter meetings created before this date (ISO 8601)
         - in: query
-          name: speaker
+          name: personId
           schema:
             type: string
-          description: Filter by speaker name
+          description: Filter by person ID
         - in: query
           name: groupByMeeting
           schema:
@@ -1692,10 +1695,10 @@ paths:
             default: 0.7
           description: Minimum combined similarity score (0-1)
         - in: query
-          name: speaker
+          name: personId
           schema:
             type: string
-          description: Filter by speaker name
+          description: Filter by person ID
       responses:
         '200':
           description: Hybrid search results retrieved successfully with combined scores
@@ -1705,10 +1708,10 @@ paths:
           description: Unauthorized
         '404':
           description: Meeting not found
-  /api/meetings/{meetingId}/transcriptions/speaker/{speaker}:
+  /api/meetings/{meetingId}/transcriptions/person/{personId}:
     get:
-      summary: Get transcriptions by speaker
-      description: Filter transcriptions by speaker name
+      summary: Get transcriptions by person
+      description: Filter transcriptions by person ID
       tags:
         - Transcriptions
       security:
@@ -1721,14 +1724,14 @@ paths:
             type: string
           description: Meeting ID
         - in: path
-          name: speaker
+          name: personId
           required: true
           schema:
             type: string
-          description: Speaker name
+          description: Person ID
       responses:
         '200':
-          description: Speaker transcriptions retrieved successfully
+          description: Person transcriptions retrieved successfully
         '401':
           description: Unauthorized
         '404':
@@ -1872,6 +1875,77 @@ paths:
           description: Unauthorized
         '404':
           description: Transcription not found
+  /api/meetings/{meetingId}/transcriptions/speaker/{speaker}/assign:
+    put:
+      summary: Batch assign speaker to person
+      description: Assign all transcriptions with a specific speaker name to a person
+      tags:
+        - Transcriptions
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: meetingId
+          required: true
+          schema:
+            type: string
+          description: Meeting ID
+        - in: path
+          name: speaker
+          required: true
+          schema:
+            type: string
+          description: Speaker name to assign (e.g., "Speaker 1")
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - personId
+              properties:
+                personId:
+                  type: string
+                  description: Person ID to assign the speaker to
+                  example: 507f1f77bcf86cd799439011
+      responses:
+        '200':
+          description: Speaker assigned successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      matchedCount:
+                        type: number
+                        description: Number of transcriptions matched
+                      modifiedCount:
+                        type: number
+                        description: Number of transcriptions updated
+                      speaker:
+                        type: string
+                        description: Original speaker name
+                      assignedTo:
+                        type: object
+                        properties:
+                          personId:
+                            type: string
+                          personName:
+                            type: string
+                  message:
+                    type: string
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '404':
+          description: Meeting or person not found
   /api/users:
     get:
       summary: Get all users
