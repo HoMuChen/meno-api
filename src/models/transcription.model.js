@@ -149,10 +149,16 @@ transcriptionSchema.methods.markAsEdited = async function () {
 
 // Static method to get paginated transcriptions
 transcriptionSchema.statics.findPaginated = async function (query, options = {}) {
-  const { page = 1, limit = 50, sort = 'startTime' } = options;
+  const { page = 1, limit = 50, sort = 'startTime', populate = true } = options;
 
-  const transcriptions = await this.find(query)
-    .populate('personId', 'name company')
+  let queryBuilder = this.find(query);
+
+  // Conditionally populate personId
+  if (populate) {
+    queryBuilder = queryBuilder.populate('personId', 'name company');
+  }
+
+  const transcriptions = await queryBuilder
     .sort(sort)
     .skip((page - 1) * limit)
     .limit(limit)
