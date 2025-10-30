@@ -626,7 +626,7 @@ class MeetingService extends BaseService {
         try {
           // Use Gemini service to generate title/description from the mock transcription
           const geminiService = require('./gemini-transcription.service');
-          if (geminiService && typeof geminiService.prototype.generateSummary === 'function') {
+          if (geminiService && typeof geminiService.prototype.generateTitleAndDescription === 'function') {
             // We'll implement this in a simpler way - just set a default title
             const meetingDoc = await this._getMeetingByIdInternal(meetingId);
             if (!meetingDoc.description || meetingDoc.description.trim() === '') {

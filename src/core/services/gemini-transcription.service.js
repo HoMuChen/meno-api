@@ -18,13 +18,12 @@ class GeminiTranscriptionService extends TranscriptionService {
 
     // Separate models for different operations
     // Transcription model: needs audio processing capabilities (e.g., gemini-2.5-pro, gemini-1.5-pro)
-    // Summary model: text-only processing (can use faster/cheaper models like gemini-1.5-flash)
+    // LLM model: text-only processing for summaries, analysis, etc. (can use faster/cheaper models like gemini-1.5-flash)
     this.transcriptionModel = process.env.GEMINI_TRANSCRIPTION_MODEL
       || process.env.GEMINI_MODEL
       || 'gemini-2.5-pro';
 
-    this.summaryModel = process.env.GEMINI_SUMMARY_MODEL
-      || process.env.GEMINI_MODEL
+    this.model = process.env.GEMINI_MODEL
       || 'gemini-1.5-flash';
 
     this.streamTimeout = parseInt(process.env.GEMINI_STREAM_TIMEOUT) || 300000; // 5 min
@@ -41,7 +40,7 @@ class GeminiTranscriptionService extends TranscriptionService {
     // Log model configuration
     logger.info('Gemini service initialized with models', {
       transcriptionModel: this.transcriptionModel,
-      summaryModel: this.summaryModel
+      model: this.model
     });
   }
 
@@ -287,7 +286,7 @@ Do NOT use array format. Each line must be parseable independently.`;
       // Generate title and description from transcription
       this.logger.info('Generating meeting title and description from transcription', { meetingId });
       try {
-        const summary = await this.generateSummary(meetingId);
+        const summary = await this.generateTitleAndDescription(meetingId);
 
         // Update meeting with generated title and description
         const meetingDoc = await this.meetingService._getMeetingByIdInternal(meetingId);
@@ -551,11 +550,11 @@ Do NOT use array format. Each line must be parseable independently.`;
    * @param {string} meetingId - Meeting ID
    * @returns {Promise<Object>} Generated title and description
    */
-  async generateSummary(meetingId) {
+  async generateTitleAndDescription(meetingId) {
     try {
-      this.logger.info('Generating meeting summary', {
+      this.logger.info('Generating meeting title and description', {
         meetingId,
-        model: this.summaryModel
+        model: this.model
       });
 
       // Get all transcription segments
@@ -575,7 +574,7 @@ Do NOT use array format. Each line must be parseable independently.`;
         .join('\n');
 
       // Use Gemini to generate title and description (text-only processing)
-      const model = this.genAI.getGenerativeModel({ model: this.summaryModel });
+      const model = this.genAI.getGenerativeModel({ model: this.model });
 
       const prompt = `Based on this meeting transcript, generate a concise title and description.
 
@@ -602,7 +601,7 @@ Do not include any markdown formatting or code blocks, just the JSON object.`;
 
       const summary = JSON.parse(cleanText);
 
-      this.logger.info('Meeting summary generated', {
+      this.logger.info('Meeting title and description generated', {
         meetingId,
         title: summary.title,
         descriptionLength: summary.description?.length || 0
@@ -613,7 +612,7 @@ Do not include any markdown formatting or code blocks, just the JSON object.`;
         description: summary.description || ''
       };
     } catch (error) {
-      this.logger.error('Error generating meeting summary', {
+      this.logger.error('Error generating meeting title and description', {
         error: error.message,
         stack: error.stack,
         meetingId
@@ -636,7 +635,7 @@ Do not include any markdown formatting or code blocks, just the JSON object.`;
     try {
       this.logger.info('Generating meeting summary with streaming', {
         meetingId,
-        model: this.summaryModel
+        model: this.model
       });
 
       // Get all transcription segments
@@ -656,7 +655,7 @@ Do not include any markdown formatting or code blocks, just the JSON object.`;
         .join('\n');
 
       // Use Gemini to generate summary with streaming (text-only processing)
-      const model = this.genAI.getGenerativeModel({ model: this.summaryModel });
+      const model = this.genAI.getGenerativeModel({ model: this.model });
 
       const prompt = `**CRITICAL REQUIREMENTS:**
 1. You MUST generate the entire summary in the EXACT SAME LANGUAGE as the transcript below
