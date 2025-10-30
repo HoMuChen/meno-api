@@ -314,7 +314,7 @@ class TranscriptionDataService extends BaseService {
 
       const result = await Transcription.findPaginated(
         query,
-        { page: parseInt(page), limit: parseInt(limit), sort, populate: false }
+        { page: parseInt(page), limit: parseInt(limit), sort, populate: true }
       );
 
       this.logSuccess('All transcriptions by person retrieved', {
