@@ -6,9 +6,10 @@ const Transcription = require('../../models/transcription.model');
 const BaseService = require('./base.service');
 
 class TranscriptionDataService extends BaseService {
-  constructor(logger, embeddingService = null) {
+  constructor(logger, embeddingService = null, retrievalService = null) {
     super(logger);
     this.embeddingService = embeddingService;
+    this.retrievalService = retrievalService;
   }
 
   /**
@@ -299,7 +300,8 @@ class TranscriptionDataService extends BaseService {
   /**
    * Get all transcriptions by person across all meetings
    * @param {string} personId - Person ID
-   * @param {Object} options - Pagination options
+   * @param {Object} options - Pagination and search options
+   * @param {string} options.search - Optional text search query (uses semantic search if available)
    * @returns {Promise<Object>} Person's transcriptions across all meetings
    */
   async getAllTranscriptionsByPerson(personId, options = {}) {
@@ -307,9 +309,67 @@ class TranscriptionDataService extends BaseService {
       const {
         page = 1,
         limit = 50,
-        sort = '-createdAt' // Default sort by createdAt descending
+        sort = '-createdAt', // Default sort by createdAt descending
+        search = null
       } = options;
 
+      // If search query provided and retrieval service available, use semantic search
+      if (search && search.trim() && this.retrievalService && this.retrievalService.isAvailable()) {
+        this.logger.info('Using semantic search for person transcriptions', {
+          personId,
+          query: search.substring(0, 50)
+        });
+
+        const retrievalResult = await this.retrievalService.retrieve(search, {
+          scope: 'person',
+          scopeId: personId,
+          topK: parseInt(limit),
+          page: parseInt(page),
+          includeMeetingInfo: true,
+          hybrid: true
+        });
+
+        // Transform retrieval results to match expected format
+        const transcriptions = retrievalResult.results.map(result => {
+          const transcription = {
+            _id: result._id,
+            meetingId: result.meetingId,
+            startTime: result.startTime,
+            endTime: result.endTime,
+            speaker: result.speaker,
+            text: result.text,
+            isEdited: result.isEdited,
+            createdAt: result.createdAt,
+            score: result.score
+          };
+
+          // Add meeting info if available
+          if (result.meeting) {
+            transcription.meeting = result.meeting;
+          }
+
+          return transcription;
+        });
+
+        this.logSuccess('Semantic search for person transcriptions completed', {
+          personId,
+          count: transcriptions.length,
+          searchQuery: search,
+          strategy: retrievalResult.metadata.strategy
+        });
+
+        return {
+          transcriptions,
+          pagination: {
+            page: parseInt(page),
+            limit: parseInt(limit),
+            total: transcriptions.length,
+            pages: Math.ceil(transcriptions.length / parseInt(limit))
+          }
+        };
+      }
+
+      // Fallback to regular query if no search or retrieval service unavailable
       const query = { personId };
 
       const result = await Transcription.findPaginated(
@@ -319,12 +379,14 @@ class TranscriptionDataService extends BaseService {
 
       this.logSuccess('All transcriptions by person retrieved', {
         personId,
-        count: result.transcriptions.length
+        count: result.transcriptions.length,
+        searchQuery: search || 'none',
+        method: 'database-query'
       });
 
       return result;
     } catch (error) {
-      this.logAndThrow(error, 'Get all transcriptions by person', { personId });
+      this.logAndThrow(error, 'Get all transcriptions by person', { personId, search });
     }
   }
 

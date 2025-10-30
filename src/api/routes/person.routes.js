@@ -254,7 +254,7 @@ const createPersonRoutes = (personController) => {
    * /api/people/{id}/transcriptions:
    *   get:
    *     summary: Get person's transcriptions
-   *     description: Retrieve all transcriptions for a person across all meetings, ordered by creation date
+   *     description: Retrieve all transcriptions for a person across all meetings with optional text search, ordered by creation date
    *     tags: [People]
    *     security:
    *       - bearerAuth: []
@@ -284,6 +284,12 @@ const createPersonRoutes = (personController) => {
    *           type: string
    *           default: "-createdAt"
    *         description: Sort field (prefix with - for descending, default is -createdAt)
+   *       - in: query
+   *         name: search
+   *         schema:
+   *           type: string
+   *         description: Optional text search query to filter transcriptions by content
+   *         example: "project deadline"
    *     responses:
    *       200:
    *         description: Transcriptions retrieved successfully

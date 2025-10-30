@@ -50,8 +50,8 @@ class RetrievalService extends BaseService {
       throw new Error('Query must be a non-empty string');
     }
 
-    if (!scope || !['meeting', 'project'].includes(scope)) {
-      throw new Error('Scope must be either "meeting" or "project"');
+    if (!scope || !['meeting', 'project', 'person'].includes(scope)) {
+      throw new Error('Scope must be either "meeting", "project", or "person"');
     }
 
     if (!scopeId) {
@@ -182,9 +182,12 @@ class RetrievalService extends BaseService {
       } else {
         filter.meetingId = { $in: meetingIds };
       }
+    } else if (scope === 'person') {
+      // Person scope - filter transcriptions by personId
+      filter.personId = new mongoose.Types.ObjectId(scopeId);
     }
 
-    // Apply personId filter if provided
+    // Apply additional personId filter if provided (overrides scope-based personId)
     if (additionalFilters.personId) {
       filter.personId = new mongoose.Types.ObjectId(additionalFilters.personId);
     }

@@ -70,7 +70,7 @@ class PersonController extends BaseController {
   getTranscriptions = this.asyncHandler(async (req, res) => {
     const userId = this.getUserId(req);
     const { id: personId } = req.params;
-    const { page, limit, sort } = req.query;
+    const { page, limit, sort, search } = req.query;
 
     // Verify person exists and belongs to user
     const person = await this.personService.getPersonById(personId, userId);
@@ -83,7 +83,8 @@ class PersonController extends BaseController {
     const result = await this.transcriptionDataService.getAllTranscriptionsByPerson(personId, {
       page,
       limit,
-      sort
+      sort,
+      search
     });
 
     return this.sendSuccess(res, result);

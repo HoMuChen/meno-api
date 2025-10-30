@@ -79,11 +79,11 @@ const createApp = () => {
   // Initialize embedding service for semantic search
   const embeddingService = new EmbeddingService(logger);
 
-  // Initialize transcription data service with embedding support
-  const transcriptionDataService = new TranscriptionDataService(logger, embeddingService);
-
   // Initialize retrieval service (core search logic)
   const retrievalService = new RetrievalService(logger, embeddingService);
+
+  // Initialize transcription data service with embedding and retrieval support
+  const transcriptionDataService = new TranscriptionDataService(logger, embeddingService, retrievalService);
 
   // Initialize semantic search service (API-specific formatting)
   const semanticSearchService = new SemanticSearchService(
