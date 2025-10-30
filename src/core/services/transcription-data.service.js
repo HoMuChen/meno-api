@@ -330,10 +330,12 @@ class TranscriptionDataService extends BaseService {
         });
 
         // Transform retrieval results to match expected format
+        // Note: RetrievalService returns meetingId as ObjectId + separate meeting object
+        // We need to match the format from findPaginated which populates meetingId directly
         const transcriptions = retrievalResult.results.map(result => {
           const transcription = {
             _id: result._id,
-            meetingId: result.meetingId,
+            meetingId: result.meeting || result.meetingId, // Populate meetingId with meeting object
             startTime: result.startTime,
             endTime: result.endTime,
             speaker: result.speaker,
@@ -342,11 +344,6 @@ class TranscriptionDataService extends BaseService {
             createdAt: result.createdAt,
             score: result.score
           };
-
-          // Add meeting info if available
-          if (result.meeting) {
-            transcription.meeting = result.meeting;
-          }
 
           return transcription;
         });
