@@ -162,8 +162,7 @@ const userSchema = new mongoose.Schema(
 );
 
 // Indexes
-userSchema.index({ email: 1 });
-userSchema.index({ googleId: 1 });
+// Note: email and googleId already have unique indexes from field definitions
 userSchema.index({ createdAt: -1 });
 userSchema.index({ tier: 1 });
 

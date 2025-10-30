@@ -88,7 +88,7 @@ const fileSchema = new mongoose.Schema(
 );
 
 // Indexes
-fileSchema.index({ path: 1 });
+// Note: path already has unique index from field definition
 fileSchema.index({ uploadedBy: 1 });
 fileSchema.index({ createdAt: -1 });
 

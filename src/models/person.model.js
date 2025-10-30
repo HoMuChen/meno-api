@@ -141,8 +141,7 @@ const personSchema = new mongoose.Schema(
     userId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
-      required: [true, 'User ID is required'],
-      index: true
+      required: [true, 'User ID is required']
     }
   },
   {
@@ -152,7 +151,8 @@ const personSchema = new mongoose.Schema(
   }
 );
 
-// Single index for efficient listing by user and recency
+// Indexes
+// Note: userId already covered by compound index below
 personSchema.index({ userId: 1, createdAt: -1 });
 
 // Instance method to get safe object

@@ -10,10 +10,7 @@ const config = {
 
   mongodb: {
     uri: process.env.MONGODB_URI || 'mongodb://localhost:27017/meno-api',
-    options: {
-      useNewUrlParser: true,
-      useUnifiedTopology: true
-    }
+    options: {}
   },
 
   storage: {

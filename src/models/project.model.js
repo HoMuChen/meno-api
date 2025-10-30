@@ -55,8 +55,7 @@ const projectSchema = new mongoose.Schema(
     userId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
-      required: [true, 'User ID is required'],
-      index: true
+      required: [true, 'User ID is required']
     }
   },
   {
@@ -66,7 +65,8 @@ const projectSchema = new mongoose.Schema(
   }
 );
 
-// Indexes for efficient querying
+// Indexes
+// Note: userId already covered by compound index below
 projectSchema.index({ userId: 1, createdAt: -1 });
 
 // Virtual for meetings count

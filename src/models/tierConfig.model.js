@@ -111,7 +111,7 @@ const tierConfigSchema = new mongoose.Schema(
 );
 
 // Indexes
-tierConfigSchema.index({ name: 1 });
+// Note: name already has unique index from field definition
 tierConfigSchema.index({ isActive: 1 });
 
 // Instance method to check if tier has unlimited duration

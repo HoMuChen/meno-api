@@ -91,8 +91,7 @@ const meetingSchema = new mongoose.Schema(
     projectId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Project',
-      required: [true, 'Project ID is required'],
-      index: true
+      required: [true, 'Project ID is required']
     },
     audioFile: {
       type: String,
@@ -175,7 +174,8 @@ const meetingSchema = new mongoose.Schema(
   }
 );
 
-// Indexes for efficient querying
+// Indexes
+// Note: projectId already covered by compound index below
 meetingSchema.index({ projectId: 1, createdAt: -1 });
 meetingSchema.index({ transcriptionStatus: 1 });
 
