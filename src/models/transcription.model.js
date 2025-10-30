@@ -152,6 +152,7 @@ transcriptionSchema.statics.findPaginated = async function (query, options = {})
   const { page = 1, limit = 50, sort = 'startTime' } = options;
 
   const transcriptions = await this.find(query)
+    .populate('personId', 'name company')
     .sort(sort)
     .skip((page - 1) * limit)
     .limit(limit)
