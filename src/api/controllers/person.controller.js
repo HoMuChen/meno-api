@@ -3,11 +3,13 @@
  * Handles HTTP requests for person endpoints
  */
 const BaseController = require('./base.controller');
+const { NotFoundError } = require('../../utils/errors');
 
 class PersonController extends BaseController {
-  constructor(personService, logger) {
+  constructor(personService, transcriptionDataService, logger) {
     super(personService, logger);
     this.personService = personService;
+    this.transcriptionDataService = transcriptionDataService;
   }
 
   /**
@@ -60,6 +62,31 @@ class PersonController extends BaseController {
     const userId = this.getUserId(req);
     const result = await this.personService.deletePerson(req.params.id, userId);
     return this.sendSuccess(res, {}, result.message);
+  });
+
+  /**
+   * Get person's transcriptions across all meetings
+   */
+  getTranscriptions = this.asyncHandler(async (req, res) => {
+    const userId = this.getUserId(req);
+    const { id: personId } = req.params;
+    const { page, limit, sort } = req.query;
+
+    // Verify person exists and belongs to user
+    const person = await this.personService.getPersonById(personId, userId);
+
+    if (!person) {
+      throw new NotFoundError('Person not found or does not belong to you');
+    }
+
+    // Get transcriptions
+    const result = await this.transcriptionDataService.getAllTranscriptionsByPerson(personId, {
+      page,
+      limit,
+      sort
+    });
+
+    return this.sendSuccess(res, result);
   });
 }
 

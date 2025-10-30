@@ -5,6 +5,7 @@
 const express = require('express');
 const { authenticate } = require('../middleware/auth.middleware');
 const { validateCreatePerson, validateUpdatePerson } = require('../validators/person.validator');
+const { validatePagination } = require('../validators/transcription.validator');
 
 const createPersonRoutes = (personController) => {
   const router = express.Router();
@@ -247,6 +248,76 @@ const createPersonRoutes = (personController) => {
    *         description: Person not found
    */
   router.delete('/:id', personController.delete);
+
+  /**
+   * @swagger
+   * /api/people/{id}/transcriptions:
+   *   get:
+   *     summary: Get person's transcriptions
+   *     description: Retrieve all transcriptions for a person across all meetings, ordered by creation date
+   *     tags: [People]
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: Person ID
+   *       - in: query
+   *         name: page
+   *         schema:
+   *           type: integer
+   *           default: 1
+   *         description: Page number
+   *       - in: query
+   *         name: limit
+   *         schema:
+   *           type: integer
+   *           default: 50
+   *           maximum: 100
+   *         description: Items per page
+   *       - in: query
+   *         name: sort
+   *         schema:
+   *           type: string
+   *           default: "-createdAt"
+   *         description: Sort field (prefix with - for descending, default is -createdAt)
+   *     responses:
+   *       200:
+   *         description: Transcriptions retrieved successfully
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                 data:
+   *                   type: object
+   *                   properties:
+   *                     transcriptions:
+   *                       type: array
+   *                       items:
+   *                         type: object
+   *                     pagination:
+   *                       type: object
+   *                       properties:
+   *                         page:
+   *                           type: integer
+   *                         limit:
+   *                           type: integer
+   *                         total:
+   *                           type: integer
+   *                         pages:
+   *                           type: integer
+   *       401:
+   *         description: Unauthorized
+   *       404:
+   *         description: Person not found
+   */
+  router.get('/:id/transcriptions', validatePagination, personController.getTranscriptions);
 
   return router;
 };

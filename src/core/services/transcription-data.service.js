@@ -260,7 +260,7 @@ class TranscriptionDataService extends BaseService {
   }
 
   /**
-   * Get transcriptions by person
+   * Get transcriptions by person within a meeting
    * @param {string} meetingId - Meeting ID
    * @param {string} personId - Person ID
    * @param {Object} options - Pagination options
@@ -293,6 +293,38 @@ class TranscriptionDataService extends BaseService {
       return result;
     } catch (error) {
       this.logAndThrow(error, 'Get transcriptions by person', { meetingId, personId });
+    }
+  }
+
+  /**
+   * Get all transcriptions by person across all meetings
+   * @param {string} personId - Person ID
+   * @param {Object} options - Pagination options
+   * @returns {Promise<Object>} Person's transcriptions across all meetings
+   */
+  async getAllTranscriptionsByPerson(personId, options = {}) {
+    try {
+      const {
+        page = 1,
+        limit = 50,
+        sort = '-createdAt' // Default sort by createdAt descending
+      } = options;
+
+      const query = { personId };
+
+      const result = await Transcription.findPaginated(
+        query,
+        { page: parseInt(page), limit: parseInt(limit), sort }
+      );
+
+      this.logSuccess('All transcriptions by person retrieved', {
+        personId,
+        count: result.transcriptions.length
+      });
+
+      return result;
+    } catch (error) {
+      this.logAndThrow(error, 'Get all transcriptions by person', { personId });
     }
   }
 

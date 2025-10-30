@@ -80,8 +80,7 @@ const transcriptionSchema = new mongoose.Schema(
     personId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Person',
-      default: null,
-      index: true
+      default: null
     },
     text: {
       type: String,
@@ -108,6 +107,7 @@ const transcriptionSchema = new mongoose.Schema(
 
 // Indexes for efficient querying
 transcriptionSchema.index({ meetingId: 1, startTime: 1 });
+transcriptionSchema.index({ personId: 1, createdAt: -1 });
 
 // Virtual to calculate duration
 transcriptionSchema.virtual('duration').get(function () {

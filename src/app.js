@@ -130,7 +130,7 @@ const createApp = () => {
     projectService,
     logger
   );
-  const personController = new PersonController(personService, logger);
+  const personController = new PersonController(personService, transcriptionDataService, logger);
 
   // Basic middleware
   app.use(express.json());
