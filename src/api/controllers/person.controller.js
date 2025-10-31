@@ -89,6 +89,51 @@ class PersonController extends BaseController {
 
     return this.sendSuccess(res, result);
   });
+
+  /**
+   * Get person's action items across all meetings
+   */
+  getActionItems = this.asyncHandler(async (req, res) => {
+    const userId = this.getUserId(req);
+    const { id: personId } = req.params;
+    const { page, limit, sort } = req.query;
+
+    // Verify person exists and belongs to user
+    const person = await this.personService.getPersonById(personId, userId);
+
+    if (!person) {
+      throw new NotFoundError('Person not found or does not belong to you');
+    }
+
+    // Get action items - we need to use a custom query to exclude personId from population
+    const ActionItem = require('../../models/action-item.model');
+    const pageNum = parseInt(page) || 1;
+    const limitNum = parseInt(limit) || 50;
+    const sortField = sort || 'createdAt';
+
+    const query = { personId };
+
+    const actionItems = await ActionItem.find(query)
+      .populate('meetingId', 'title projectId')
+      .sort(sortField)
+      .skip((pageNum - 1) * limitNum)
+      .limit(limitNum)
+      .lean();
+
+    const total = await ActionItem.countDocuments(query);
+
+    const result = {
+      actionItems,
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total,
+        pages: Math.ceil(total / limitNum)
+      }
+    };
+
+    return this.sendSuccess(res, result);
+  });
 }
 
 module.exports = PersonController;
