@@ -10,7 +10,8 @@
     "test:watch": "jest --watch",
     "lint": "eslint src/**/*.js",
     "lint:fix": "eslint src/**/*.js --fix",
-    "generate:openapi": "node scripts/generate-openapi.js"
+    "generate:openapi": "node scripts/generate-openapi.js",
+    "generate:token": "node scripts/generate-token.js"
   },
   "keywords": [
     "api",
