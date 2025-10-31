@@ -372,6 +372,16 @@ class MeetingService extends BaseService {
       // Verify ownership
       this.authorizationService.verifyMeetingOwnership(meeting, userId);
 
+      // Handle projectId update if provided
+      if (updates.projectId !== undefined) {
+        // Verify user owns the new project
+        const ownsNewProject = await this.projectService.verifyOwnership(updates.projectId, userId);
+        if (!ownsNewProject) {
+          throw new Error('New project not found or access denied');
+        }
+        meeting.projectId = updates.projectId;
+      }
+
       // Only allow updating title
       if (updates.title !== undefined) {
         meeting.title = updates.title;

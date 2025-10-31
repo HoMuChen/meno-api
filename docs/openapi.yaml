@@ -110,17 +110,10 @@ components:
           type: string
           description: Assignee name as extracted by LLM (may not match personId)
           maxLength: 100
-        priority:
-          type: string
-          enum:
-            - high
-            - medium
-            - low
-          description: Priority level of the action item
         dueDate:
           type: string
-          description: Due date or deadline as free text
-          maxLength: 100
+          format: date-time
+          description: Due date or deadline as ISO 8601 datetime
         context:
           type: string
           description: Additional context or related discussion point
@@ -1064,7 +1057,7 @@ paths:
           description: Meeting not found
     put:
       summary: Update meeting
-      description: Update meeting title
+      description: Update meeting title and/or move meeting to a different project
       tags:
         - Meetings
       security:
@@ -1092,6 +1085,11 @@ paths:
                   type: string
                   minLength: 2
                   maxLength: 200
+                  description: New meeting title
+                projectId:
+                  type: string
+                  pattern: ^[0-9a-fA-F]{24}$
+                  description: New project ID to move the meeting to (user must own the project)
       responses:
         '200':
           description: Meeting updated successfully
@@ -1100,7 +1098,7 @@ paths:
         '401':
           description: Unauthorized
         '404':
-          description: Meeting not found
+          description: Meeting not found or new project not found
     delete:
       summary: Delete meeting
       description: Delete meeting, audio file, and all transcriptions
@@ -1301,7 +1299,6 @@ paths:
         Action items include:
         - task: What needs to be done
         - assignee: Person responsible (matched from transcript speakers)
-        - priority: high/medium/low
         - dueDate: When it should be completed
         - context: Additional context from the meeting
       tags:
@@ -1410,13 +1407,6 @@ paths:
                         assignee:
                           type: string
                           nullable: true
-                        priority:
-                          type: string
-                          enum:
-                            - high
-                            - medium
-                            - low
-                          nullable: true
                         dueDate:
                           type: string
                           nullable: true
@@ -1489,12 +1479,6 @@ paths:
                   maxLength: 100
                 personId:
                   type: string
-                priority:
-                  type: string
-                  enum:
-                    - high
-                    - medium
-                    - low
                 dueDate:
                   type: string
                   maxLength: 100
@@ -2932,13 +2916,6 @@ paths:
                           type: string
                         assignee:
                           type: string
-                          nullable: true
-                        priority:
-                          type: string
-                          enum:
-                            - high
-                            - medium
-                            - low
                           nullable: true
                         dueDate:
                           type: string

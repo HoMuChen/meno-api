@@ -157,7 +157,7 @@ const createMeetingRoutes = (meetingController, audioStorageProvider) => {
    * /api/projects/{projectId}/meetings/{id}:
    *   put:
    *     summary: Update meeting
-   *     description: Update meeting title
+   *     description: Update meeting title and/or move meeting to a different project
    *     tags: [Meetings]
    *     security:
    *       - bearerAuth: []
@@ -184,6 +184,11 @@ const createMeetingRoutes = (meetingController, audioStorageProvider) => {
    *                 type: string
    *                 minLength: 2
    *                 maxLength: 200
+   *                 description: New meeting title
+   *               projectId:
+   *                 type: string
+   *                 pattern: '^[0-9a-fA-F]{24}$'
+   *                 description: New project ID to move the meeting to (user must own the project)
    *     responses:
    *       200:
    *         description: Meeting updated successfully
@@ -192,7 +197,7 @@ const createMeetingRoutes = (meetingController, audioStorageProvider) => {
    *       401:
    *         description: Unauthorized
    *       404:
-   *         description: Meeting not found
+   *         description: Meeting not found or new project not found
    */
   router.put('/:id', requireMeetingOwnership, validateUpdateMeeting, meetingController.update);
 

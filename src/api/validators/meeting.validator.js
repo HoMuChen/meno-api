@@ -79,6 +79,12 @@ const updateMeetingSchema = Joi.object({
     .messages({
       'string.min': 'Meeting title must be at least 2 characters long',
       'string.max': 'Meeting title cannot exceed 200 characters'
+    }),
+  projectId: Joi.string()
+    .optional()
+    .regex(/^[0-9a-fA-F]{24}$/)
+    .messages({
+      'string.pattern.base': 'Invalid project ID format. Must be a valid MongoDB ObjectId'
     })
 }).min(1).messages({
   'object.min': 'At least one field must be provided for update'
