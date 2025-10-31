@@ -406,6 +406,261 @@ const createMeetingRoutes = (meetingController, audioStorageProvider) => {
    */
   router.post('/:id/summary/stream', requireMeetingOwnership, meetingController.generateSummaryStream);
 
+  /**
+   * @swagger
+   * /api/projects/{projectId}/meetings/{id}/action-items/generate:
+   *   post:
+   *     summary: Generate action items for meeting
+   *     description: |
+   *       Generate action items from meeting transcription using AI.
+   *       Returns immediately with 202 status while processing in background.
+   *       Client should poll meeting status to check completion.
+   *
+   *       Action items include:
+   *       - task: What needs to be done
+   *       - assignee: Person responsible (matched from transcript speakers)
+   *       - dueDate: When it should be completed
+   *       - context: Additional context from the meeting
+   *     tags: [Meetings]
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: projectId
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: Project ID
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: Meeting ID
+   *     responses:
+   *       202:
+   *         description: Action items generation started
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 message:
+   *                   type: string
+   *                   example: "Action items generation started"
+   *                 actionItemsStatus:
+   *                   type: string
+   *                   enum: [processing]
+   *                   example: "processing"
+   *                 actionItemsProgress:
+   *                   type: number
+   *                   example: 0
+   *       400:
+   *         description: Transcription not completed or already processing
+   *       401:
+   *         description: Unauthorized
+   *       404:
+   *         description: Meeting not found
+   */
+  router.post('/:id/action-items/generate', requireMeetingOwnership, meetingController.generateActionItems);
+
+  /**
+   * @swagger
+   * /api/projects/{projectId}/meetings/{id}/action-items:
+   *   get:
+   *     summary: List action items for meeting
+   *     description: Get paginated list of action items generated for this meeting
+   *     tags: [Meetings]
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: projectId
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: Project ID
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: Meeting ID
+   *       - in: query
+   *         name: page
+   *         schema:
+   *           type: integer
+   *           default: 1
+   *         description: Page number
+   *       - in: query
+   *         name: limit
+   *         schema:
+   *           type: integer
+   *           default: 50
+   *         description: Items per page
+   *       - in: query
+   *         name: sort
+   *         schema:
+   *           type: string
+   *           default: "createdAt"
+   *         description: Sort field
+   *     responses:
+   *       200:
+   *         description: Action items retrieved successfully
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 actionItems:
+   *                   type: array
+   *                   items:
+   *                     type: object
+   *                     properties:
+   *                       _id:
+   *                         type: string
+   *                       meetingId:
+   *                         type: string
+   *                       personId:
+   *                         type: string
+   *                         nullable: true
+   *                       task:
+   *                         type: string
+   *                       assignee:
+   *                         type: string
+   *                         nullable: true
+   *                       dueDate:
+   *                         type: string
+   *                         nullable: true
+   *                       context:
+   *                         type: string
+   *                         nullable: true
+   *                       status:
+   *                         type: string
+   *                         enum: [pending, in_progress, completed]
+   *                       createdAt:
+   *                         type: string
+   *                         format: date-time
+   *                 pagination:
+   *                   type: object
+   *                   properties:
+   *                     total:
+   *                       type: integer
+   *                     page:
+   *                       type: integer
+   *                     limit:
+   *                       type: integer
+   *                     totalPages:
+   *                       type: integer
+   *       401:
+   *         description: Unauthorized
+   *       404:
+   *         description: Meeting not found
+   */
+  router.get('/:id/action-items', requireMeetingOwnership, meetingController.listActionItems);
+
+  /**
+   * @swagger
+   * /api/projects/{projectId}/meetings/{id}/action-items/{actionItemId}:
+   *   patch:
+   *     summary: Update an action item
+   *     description: Update fields of a specific action item
+   *     tags: [Meetings]
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: projectId
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: Project ID
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: Meeting ID
+   *       - in: path
+   *         name: actionItemId
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: Action Item ID
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             properties:
+   *               task:
+   *                 type: string
+   *                 maxLength: 500
+   *               assignee:
+   *                 type: string
+   *                 maxLength: 100
+   *               personId:
+   *                 type: string
+   *               dueDate:
+   *                 type: string
+   *                 maxLength: 100
+   *               context:
+   *                 type: string
+   *                 maxLength: 500
+   *               status:
+   *                 type: string
+   *                 enum: [pending, in_progress, completed]
+   *     responses:
+   *       200:
+   *         description: Action item updated successfully
+   *       400:
+   *         description: Validation error
+   *       401:
+   *         description: Unauthorized
+   *       404:
+   *         description: Action item not found
+   */
+  router.patch('/:id/action-items/:actionItemId', requireMeetingOwnership, meetingController.updateActionItem);
+
+  /**
+   * @swagger
+   * /api/projects/{projectId}/meetings/{id}/action-items/{actionItemId}:
+   *   delete:
+   *     summary: Delete an action item
+   *     description: Permanently delete a specific action item
+   *     tags: [Meetings]
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: projectId
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: Project ID
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: Meeting ID
+   *       - in: path
+   *         name: actionItemId
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: Action Item ID
+   *     responses:
+   *       204:
+   *         description: Action item deleted successfully
+   *       401:
+   *         description: Unauthorized
+   *       404:
+   *         description: Action item not found
+   */
+  router.delete('/:id/action-items/:actionItemId', requireMeetingOwnership, meetingController.deleteActionItem);
+
   return router;
 };
 

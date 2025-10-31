@@ -6,9 +6,10 @@ const BaseController = require('./base.controller');
 const { BadRequestError } = require('../../utils/errors');
 
 class MeetingController extends BaseController {
-  constructor(meetingService, logger) {
+  constructor(meetingService, actionItemService, logger) {
     super(meetingService, logger);
     this.meetingService = meetingService;
+    this.actionItemService = actionItemService;
   }
 
   /**
@@ -209,6 +210,89 @@ class MeetingController extends BaseController {
       })}\n\n`);
       res.end();
     }
+  });
+
+  /**
+   * Generate action items for a meeting
+   * POST /api/projects/:projectId/meetings/:id/action-items/generate
+   */
+  generateActionItems = this.asyncHandler(async (req, res) => {
+    const meetingId = req.params.id;
+    const userId = req.user._id;
+
+    const result = await this.meetingService.generateActionItems(meetingId, userId);
+
+    res.status(202).json({
+      message: 'Action items generation started',
+      ...result
+    });
+  });
+
+  /**
+   * List action items for a meeting
+   * GET /api/projects/:projectId/meetings/:id/action-items
+   */
+  listActionItems = this.asyncHandler(async (req, res) => {
+    const meetingId = req.params.id;
+    const { page, limit, sort } = req.query;
+
+    const result = await this.actionItemService.getActionItemsByMeetingId(meetingId, {
+      page: parseInt(page) || 1,
+      limit: parseInt(limit) || 50,
+      sort: sort || 'createdAt'
+    });
+
+    res.json(result);
+  });
+
+  /**
+   * List action items for a user
+   * GET /api/users/:userId/action-items
+   */
+  listUserActionItems = this.asyncHandler(async (req, res) => {
+    const { userId } = req.params;
+    const { page, limit, sort } = req.query;
+
+    const result = await this.actionItemService.getUserActionItems(userId, {
+      page: parseInt(page) || 1,
+      limit: parseInt(limit) || 50,
+      sort: sort || 'createdAt'
+    });
+
+    res.json(result);
+  });
+
+  /**
+   * Update an action item
+   * PATCH /api/projects/:projectId/meetings/:id/action-items/:actionItemId
+   */
+  updateActionItem = this.asyncHandler(async (req, res) => {
+    const { actionItemId } = req.params;
+    const updates = req.body;
+
+    const actionItem = await this.actionItemService.updateActionItem(actionItemId, updates);
+
+    if (!actionItem) {
+      return res.status(404).json({ error: 'Action item not found' });
+    }
+
+    res.json(actionItem);
+  });
+
+  /**
+   * Delete an action item
+   * DELETE /api/projects/:projectId/meetings/:id/action-items/:actionItemId
+   */
+  deleteActionItem = this.asyncHandler(async (req, res) => {
+    const { actionItemId } = req.params;
+
+    const actionItem = await this.actionItemService.deleteActionItem(actionItemId);
+
+    if (!actionItem) {
+      return res.status(404).json({ error: 'Action item not found' });
+    }
+
+    res.status(204).send();
   });
 }
 

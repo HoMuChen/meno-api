@@ -724,6 +724,111 @@ Summarize the final outcomes and what was agreed upon.
   }
 
   /**
+   * Generate action items from meeting transcription using LLM
+   * @param {string} meetingId - Meeting ID
+   * @returns {Promise<Array>} Array of action items (without meetingId/personId set)
+   */
+  async generateActionItems(meetingId) {
+    try {
+      this.logger.info('Generating action items', {
+        meetingId,
+        model: this.model
+      });
+
+      // Get all transcription segments
+      const transcriptionData = await this.transcriptionDataService.getTranscriptions(meetingId, {
+        page: 1,
+        limit: 1000,
+        sort: 'startTime'
+      });
+
+      if (!transcriptionData.transcriptions || transcriptionData.transcriptions.length === 0) {
+        throw new Error('No transcriptions found for meeting');
+      }
+
+      // Get Transcription model to populate personId
+      const Transcription = require('../../models/transcription.model');
+      const transcriptionsWithPeople = await Transcription.find({
+        _id: { $in: transcriptionData.transcriptions.map(t => t._id) }
+      }).populate('personId', 'name');
+
+      // Extract unique people from transcriptions (only those with personId)
+      const peopleInTranscript = [...new Set(
+        transcriptionsWithPeople
+          .filter(t => t.personId && t.personId.name)
+          .map(t => t.personId.name)
+      )];
+
+      // Build transcript using personId.name first, fallback to speaker field
+      const fullTranscript = transcriptionsWithPeople
+        .map(t => {
+          const speakerName = t.personId?.name || t.speaker;
+          return `${speakerName}: ${t.text}`;
+        })
+        .join('\n');
+
+      // Use Gemini to extract action items (text-only processing)
+      const model = this.genAI.getGenerativeModel({ model: this.model });
+
+      const prompt = `Based on this meeting transcript, extract action items.
+
+IMPORTANT: Generate the action items in the SAME LANGUAGE as the transcript text.
+
+${peopleInTranscript.length > 0 ? `Available People (for assignee matching):
+${peopleInTranscript.map(name => `- ${name}`).join('\n')}
+` : ''}
+Transcript:
+${fullTranscript.substring(0, 15000)} ${fullTranscript.length > 15000 ? '...(truncated)' : ''}
+
+Return ONLY a JSON array with this exact structure:
+[
+  {
+    "task": "Brief description of the action item - in same language as transcript",
+    "assignee": "Person responsible (use name from Available People list if mentioned, otherwise null)",
+    "dueDate": "Due date or deadline (if mentioned, otherwise null)",
+    "context": "Brief context or related discussion point (optional)"
+  }
+]
+
+Guidelines:
+- Only include explicit action items or clear commitments
+- Include implicit tasks if strongly indicated by the discussion
+- Match assignee to Available People list when possible
+- Prioritize based on discussion urgency
+- Return empty array [] if no action items found
+- DO NOT include markdown formatting or code blocks
+- MUST use the same language as the transcript for all text fields
+- Return valid JSON only`;
+
+      const result = await model.generateContent(prompt);
+      const response = await result.response;
+      const text = response.text();
+
+      // Parse the JSON response
+      let cleanText = text.trim();
+      cleanText = cleanText.replace(/```json\n?/g, '').replace(/```\n?/g, '');
+
+      const actionItems = JSON.parse(cleanText);
+
+      this.logger.info('Action items generated', {
+        meetingId,
+        count: Array.isArray(actionItems) ? actionItems.length : 0
+      });
+
+      return Array.isArray(actionItems) ? actionItems : [];
+    } catch (error) {
+      this.logger.error('Error generating action items', {
+        error: error.message,
+        stack: error.stack,
+        meetingId
+      });
+
+      // Return empty array on error
+      return [];
+    }
+  }
+
+  /**
    * Estimate transcription time based on audio duration
    * @param {number} audioDuration - Audio duration in seconds
    * @returns {number} Estimated time in seconds

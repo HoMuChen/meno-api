@@ -21,6 +21,7 @@ const ProjectService = require('./core/services/project.service');
 const MeetingService = require('./core/services/meeting.service');
 const TranscriptionDataService = require('./core/services/transcription-data.service');
 const TranscriptionServiceFactory = require('./core/services/transcription-service.factory');
+const ActionItemService = require('./core/services/action-item.service');
 const EmbeddingService = require('./core/services/embedding.service');
 const RetrievalService = require('./core/services/retrieval.service');
 const SemanticSearchService = require('./core/services/semantic-search.service');
@@ -93,6 +94,9 @@ const createApp = () => {
     retrievalService
   );
 
+  // Initialize action item service
+  const actionItemService = new ActionItemService(logger);
+
   // Initialize meeting service first (needed for transcription factory)
   const meetingService = new MeetingService(
     logger,
@@ -101,7 +105,8 @@ const createApp = () => {
     null, // transcriptionService - will be set after factory initialization
     transcriptionDataService,
     audioStorageProvider,
-    authorizationService
+    authorizationService,
+    actionItemService
   );
 
   // Initialize transcription service using factory
@@ -123,7 +128,7 @@ const createApp = () => {
   const healthController = new HealthController(logger);
   const authController = new AuthController(authService, logger);
   const projectController = new ProjectController(projectService, logger);
-  const meetingController = new MeetingController(meetingService, logger);
+  const meetingController = new MeetingController(meetingService, actionItemService, logger);
   const transcriptionController = new TranscriptionController(
     transcriptionDataService,
     semanticSearchService,

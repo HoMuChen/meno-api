@@ -11,7 +11,7 @@ const BaseService = require('./base.service');
 const { getAudioDuration, getAudioDurationFromStorage } = require('../utils/audio-utils');
 
 class MeetingService extends BaseService {
-  constructor(logger, fileService, projectService, transcriptionService, transcriptionDataService, audioStorageProvider, authorizationService) {
+  constructor(logger, fileService, projectService, transcriptionService, transcriptionDataService, audioStorageProvider, authorizationService, actionItemService) {
     super(logger);
     this.fileService = fileService;
     this.projectService = projectService;
@@ -19,6 +19,7 @@ class MeetingService extends BaseService {
     this.transcriptionDataService = transcriptionDataService;
     this.audioStorageProvider = audioStorageProvider;
     this.authorizationService = authorizationService;
+    this.actionItemService = actionItemService;
   }
 
   /**
@@ -913,6 +914,159 @@ class MeetingService extends BaseService {
       return meeting.toSafeObject();
     } catch (error) {
       this.logAndThrow(error, 'Save summary', { meetingId, userId });
+    }
+  }
+
+  /**
+   * Generate action items for a meeting (async background job)
+   * @param {string} meetingId - Meeting ID
+   * @param {string} userId - User ID (for authorization)
+   * @returns {Promise<Object>} Current status
+   */
+  async generateActionItems(meetingId, userId) {
+    try {
+      // Verify ownership
+      const meeting = await Meeting.findById(meetingId).populate('projectId');
+
+      if (!meeting) {
+        throw new Error('Meeting not found');
+      }
+
+      this.authorizationService.verifyMeetingOwnership(meeting, userId);
+
+      // Check meeting has completed transcription
+      if (meeting.transcriptionStatus !== 'completed') {
+        throw new Error('Meeting transcription must be completed before generating action items');
+      }
+
+      // Update status to processing
+      meeting.actionItemsStatus = 'processing';
+      meeting.actionItemsProgress = 0;
+      await meeting.save();
+
+      this.logSuccess('Action items generation started', { meetingId, userId });
+
+      // Process in background (fire and forget)
+      this._processActionItemsGeneration(meetingId).catch(error => {
+        this.logger.error('Action items generation background job failed', {
+          meetingId,
+          error: error.message
+        });
+      });
+
+      return {
+        actionItemsStatus: 'processing',
+        actionItemsProgress: 0
+      };
+    } catch (error) {
+      this.logAndThrow(error, 'Generate action items', { meetingId, userId });
+    }
+  }
+
+  /**
+   * Process action items generation in background
+   * @param {string} meetingId - Meeting ID
+   * @private
+   */
+  async _processActionItemsGeneration(meetingId) {
+    try {
+      this.logger.info('Starting action items generation', { meetingId });
+
+      const meeting = await Meeting.findById(meetingId);
+
+      if (!meeting) {
+        throw new Error('Meeting not found');
+      }
+
+      // Update progress
+      meeting.actionItemsProgress = 10;
+      await meeting.save();
+
+      // Generate action items using LLM
+      const llmActionItems = await this.transcriptionService.generateActionItems(meetingId);
+
+      meeting.actionItemsProgress = 60;
+      await meeting.save();
+
+      // Fetch people in transcriptions for matching
+      const Transcription = require('../../models/transcription.model');
+      const transcriptions = await Transcription.find({ meetingId }).populate('personId', 'name');
+
+      // Build name -> personId map
+      const nameToPersonId = new Map();
+      transcriptions
+        .filter(t => t.personId && t.personId.name)
+        .forEach(t => {
+          nameToPersonId.set(t.personId.name.toLowerCase(), t.personId._id);
+        });
+
+      // Match assignee names to personIds and prepare for insertion
+      const actionItemsToCreate = llmActionItems.map(item => {
+        let personId = null;
+
+        if (item.assignee) {
+          // Exact match (case-insensitive)
+          personId = nameToPersonId.get(item.assignee.toLowerCase());
+
+          // Partial match (first/last name)
+          if (!personId) {
+            const assigneeParts = item.assignee.toLowerCase().split(' ');
+            for (const [name, id] of nameToPersonId.entries()) {
+              const nameParts = name.split(' ');
+              if (assigneeParts.some(part => nameParts.includes(part))) {
+                personId = id;
+                break;
+              }
+            }
+          }
+        }
+
+        return {
+          ...item,
+          personId,
+          userId: meeting.userId
+        };
+      });
+
+      meeting.actionItemsProgress = 80;
+      await meeting.save();
+
+      // Save action items to database
+      if (actionItemsToCreate.length > 0) {
+        await this.actionItemService.createActionItems(meetingId, actionItemsToCreate);
+      }
+
+      // Update meeting to completed
+      meeting.actionItemsStatus = 'completed';
+      meeting.actionItemsProgress = 100;
+      meeting.metadata = meeting.metadata || {};
+      meeting.metadata.actionItems = {
+        generatedAt: new Date(),
+        count: actionItemsToCreate.length
+      };
+      await meeting.save();
+
+      this.logger.info('Action items generation completed', {
+        meetingId,
+        count: actionItemsToCreate.length
+      });
+    } catch (error) {
+      this.logger.error('Error processing action items generation', {
+        meetingId,
+        error: error.message,
+        stack: error.stack
+      });
+
+      // Update meeting to failed
+      const meeting = await Meeting.findById(meetingId);
+      if (meeting) {
+        meeting.actionItemsStatus = 'failed';
+        meeting.actionItemsProgress = 0;
+        meeting.metadata = meeting.metadata || {};
+        meeting.metadata.actionItems = meeting.metadata.actionItems || {};
+        meeting.metadata.actionItems.errorMessage = error.message;
+        await meeting.save();
+      }
     }
   }
 }

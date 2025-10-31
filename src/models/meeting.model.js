@@ -124,6 +124,20 @@ const meetingSchema = new mongoose.Schema(
       min: [0, 'Progress cannot be negative'],
       max: [100, 'Progress cannot exceed 100']
     },
+    actionItemsStatus: {
+      type: String,
+      enum: {
+        values: ['not_started', 'processing', 'completed', 'failed'],
+        message: 'Invalid action items status'
+      },
+      default: 'not_started'
+    },
+    actionItemsProgress: {
+      type: Number,
+      default: 0,
+      min: [0, 'Progress cannot be negative'],
+      max: [100, 'Progress cannot exceed 100']
+    },
     metadata: {
       fileSize: {
         type: Number,
@@ -162,6 +176,21 @@ const meetingSchema = new mongoose.Schema(
         },
         lastChunkAt: {
           type: Date,
+          default: null
+        }
+      },
+      actionItems: {
+        generatedAt: {
+          type: Date,
+          default: null
+        },
+        count: {
+          type: Number,
+          default: 0,
+          min: [0, 'Count cannot be negative']
+        },
+        errorMessage: {
+          type: String,
           default: null
         }
       }

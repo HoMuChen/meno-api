@@ -505,6 +505,115 @@ const createUserRoutes = (userController, meetingController) => {
     router.get('/:userId/meetings', authenticate, meetingController.getUserMeetings);
   }
 
+  /**
+   * @swagger
+   * /api/users/{userId}/action-items:
+   *   get:
+   *     summary: Get user's action items
+   *     description: Retrieve paginated list of all action items for a user across all their meetings
+   *     tags: [Users]
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: userId
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: User ID
+   *       - in: query
+   *         name: page
+   *         schema:
+   *           type: integer
+   *           default: 1
+   *         description: Page number
+   *       - in: query
+   *         name: limit
+   *         schema:
+   *           type: integer
+   *           default: 50
+   *         description: Items per page
+   *       - in: query
+   *         name: sort
+   *         schema:
+   *           type: string
+   *           default: "createdAt"
+   *         description: Sort field
+   *     responses:
+   *       200:
+   *         description: User action items retrieved successfully
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 actionItems:
+   *                   type: array
+   *                   items:
+   *                     type: object
+   *                     properties:
+   *                       _id:
+   *                         type: string
+   *                       meetingId:
+   *                         type: object
+   *                         properties:
+   *                           _id:
+   *                             type: string
+   *                           title:
+   *                             type: string
+   *                           projectId:
+   *                             type: string
+   *                       userId:
+   *                         type: string
+   *                       personId:
+   *                         type: object
+   *                         nullable: true
+   *                         properties:
+   *                           _id:
+   *                             type: string
+   *                           name:
+   *                             type: string
+   *                           email:
+   *                             type: string
+   *                           company:
+   *                             type: string
+   *                       task:
+   *                         type: string
+   *                       assignee:
+   *                         type: string
+   *                         nullable: true
+   *                       dueDate:
+   *                         type: string
+   *                         nullable: true
+   *                       context:
+   *                         type: string
+   *                         nullable: true
+   *                       status:
+   *                         type: string
+   *                         enum: [pending, in_progress, completed]
+   *                       createdAt:
+   *                         type: string
+   *                         format: date-time
+   *                 pagination:
+   *                   type: object
+   *                   properties:
+   *                     page:
+   *                       type: integer
+   *                     limit:
+   *                       type: integer
+   *                     total:
+   *                       type: integer
+   *                     pages:
+   *                       type: integer
+   *       401:
+   *         description: Unauthorized
+   *       404:
+   *         description: User not found
+   */
+  if (meetingController) {
+    router.get('/:userId/action-items', authenticate, meetingController.listUserActionItems);
+  }
+
   return router;
 };
 
