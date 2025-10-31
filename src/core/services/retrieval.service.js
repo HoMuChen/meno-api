@@ -265,7 +265,9 @@ class RetrievalService extends BaseService {
     };
 
     if (includeMeetingInfo) {
+      projection['meeting._id'] = 1;
       projection['meeting.title'] = 1;
+      projection['meeting.projectId'] = 1;
       projection['meeting.createdAt'] = 1;
     }
 
@@ -412,7 +414,9 @@ class RetrievalService extends BaseService {
     };
 
     if (includeMeetingInfo) {
+      projection['meeting._id'] = 1;
       projection['meeting.title'] = 1;
+      projection['meeting.projectId'] = 1;
       projection['meeting.createdAt'] = 1;
     }
 

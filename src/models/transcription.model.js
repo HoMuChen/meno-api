@@ -157,7 +157,7 @@ transcriptionSchema.statics.findPaginated = async function (query, options = {})
   if (populate) {
     queryBuilder = queryBuilder
       .populate('personId', 'name company')
-      .populate('meetingId', 'title projectId');
+      .populate('meetingId', 'title projectId createdAt');
   }
 
   const transcriptions = await queryBuilder
