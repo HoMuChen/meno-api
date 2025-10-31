@@ -6,6 +6,7 @@ const jwt = require('jsonwebtoken');
 const User = require('../../models/user.model');
 const TierConfig = require('../../models/tierConfig.model');
 const Project = require('../../models/project.model');
+const Person = require('../../models/person.model');
 const BaseService = require('./base.service');
 
 class AuthService extends BaseService {
@@ -73,6 +74,44 @@ class AuthService extends BaseService {
   }
 
   /**
+   * Create default person (self) for new user
+   * @param {string} userId - User ID
+   * @param {string} name - User's name
+   * @param {string} email - User's email
+   * @returns {Object} Created person
+   */
+  async createDefaultPerson(userId, name, email) {
+    try {
+      this.logger.debug('Creating default person for new user', { userId, name, email });
+
+      const defaultPerson = new Person({
+        name,
+        email,
+        userId,
+        notes: 'This is you!'
+      });
+
+      await defaultPerson.save();
+
+      this.logger.info('Default person created', {
+        userId,
+        personId: defaultPerson._id,
+        personName: defaultPerson.name
+      });
+
+      return defaultPerson;
+    } catch (error) {
+      this.logger.error('Failed to create default person', {
+        error: error.message,
+        stack: error.stack,
+        userId
+      });
+      // Don't throw - we don't want to fail user registration if person creation fails
+      // The user can create people manually later
+    }
+  }
+
+  /**
    * Register new user with email and password
    * @param {Object} userData - User registration data
    * @returns {Object} Created user and token
@@ -112,6 +151,9 @@ class AuthService extends BaseService {
 
       // Create default project for new user
       await this.createDefaultProject(user._id);
+
+      // Create default person (self) for new user
+      await this.createDefaultPerson(user._id, user.name, user.email);
 
       // Generate token
       const token = this.generateToken({
@@ -280,6 +322,9 @@ class AuthService extends BaseService {
 
         // Create default project for new user
         await this.createDefaultProject(user._id);
+
+        // Create default person (self) for new user
+        await this.createDefaultPerson(user._id, user.name, user.email);
       }
 
       // Check if user is active
