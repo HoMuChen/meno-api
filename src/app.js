@@ -40,10 +40,15 @@ const PersonController = require('./api/controllers/person.controller');
 const createApp = () => {
   const app = express();
 
+  logger.info('Initializing Express application...');
+
   // Initialize Passport
+  logger.info('Configuring authentication with Passport...');
   configurePassport();
+  logger.info('✅ Passport configured successfully');
 
   // Initialize storage provider
+  logger.info('Initializing storage providers...');
   const storageProvider = StorageFactory.createProvider(logger, {
     provider: config.storage.provider,
     basePath: config.storage.localPath,
@@ -51,7 +56,11 @@ const createApp = () => {
     keyFilename: config.storage.gcsKeyFile
   });
 
-  logger.info('Storage provider initialized', { provider: config.storage.provider });
+  logger.info('✅ User files storage provider initialized', {
+    provider: config.storage.provider,
+    bucket: config.storage.provider === 'gcs' ? (config.storage.gcsBucket || 'user-files') : 'N/A',
+    basePath: config.storage.provider === 'local' ? config.storage.localPath : 'N/A'
+  });
 
   // Initialize audio storage provider for meetings
   const audioStorageProvider = StorageFactory.createProvider(logger, {
@@ -63,21 +72,29 @@ const createApp = () => {
     keyFilename: process.env.GCS_KEYFILE_PATH
   });
 
-  logger.info('Audio storage provider initialized', {
-    provider: process.env.STORAGE_PROVIDER || 'local'
+  logger.info('✅ Audio storage provider initialized', {
+    provider: process.env.STORAGE_PROVIDER || 'local',
+    bucket: process.env.STORAGE_PROVIDER === 'gcs' ? (process.env.GCS_BUCKET_NAME || 'audio-files') : 'N/A',
+    basePath: process.env.STORAGE_PROVIDER === 'local' ? (process.env.LOCAL_STORAGE_PATH || './storage') : 'N/A'
   });
 
   // Initialize services with dependencies
+  logger.info('Initializing core services...');
+
   const userService = new UserService(logger, storageProvider);
   const fileService = new FileService(logger, storageProvider);
   const authService = new AuthService(logger);
   const authorizationService = new AuthorizationService(logger);
   const personService = new PersonService(logger);
 
+  logger.info('✅ Core services initialized (User, File, Auth, Authorization, Person)');
+
   // Initialize project service without meeting service (circular dependency)
   const projectService = new ProjectService(logger);
+  logger.info('✅ Project service initialized');
 
   // Initialize embedding service for semantic search
+  logger.info('Initializing AI/ML services...');
   const embeddingService = new EmbeddingService(logger);
 
   // Initialize retrieval service (core search logic)
@@ -94,10 +111,14 @@ const createApp = () => {
     retrievalService
   );
 
+  logger.info('✅ AI/ML services initialized (Embedding, Retrieval, Semantic Search)');
+
   // Initialize action item service
   const actionItemService = new ActionItemService(logger);
+  logger.info('✅ Action item service initialized');
 
   // Initialize meeting service first (needed for transcription factory)
+  logger.info('Initializing meeting and transcription services...');
   const meetingService = new MeetingService(
     logger,
     fileService,
@@ -122,7 +143,11 @@ const createApp = () => {
   // Set the meeting service on project service (for cascade deletion)
   projectService.meetingService = meetingService;
 
+  logger.info('✅ Meeting and transcription services initialized');
+
   // Initialize controllers with services
+  logger.info('Initializing API controllers...');
+
   const userController = new UserController(userService, logger);
   const fileController = new FileController(fileService, logger);
   const healthController = new HealthController(logger);
@@ -137,7 +162,10 @@ const createApp = () => {
   );
   const personController = new PersonController(personService, transcriptionDataService, logger);
 
+  logger.info('✅ API controllers initialized (8 controllers ready)');
+
   // Basic middleware
+  logger.info('Configuring Express middleware...');
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
 
@@ -158,11 +186,15 @@ const createApp = () => {
     next();
   });
 
+  logger.info('✅ Middleware configured (JSON, URL-encoded, Passport, CORS, Request Logger)');
+
   // Swagger documentation
+  logger.info('Setting up Swagger documentation...');
   app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
     explorer: true,
     customCss: '.swagger-ui .topbar { display: none }'
   }));
+  logger.info('✅ Swagger documentation available at /api-docs');
 
   // Root endpoint
   app.get('/', (req, res) => {
@@ -177,9 +209,11 @@ const createApp = () => {
   });
 
   // Auth routes (at root level)
+  logger.info('Mounting authentication routes at /auth');
   app.use('/auth', createAuthRoutes(authController));
 
   // API routes (at /api prefix) - pass audioStorageProvider for streaming uploads
+  logger.info(`Mounting API routes at ${config.api.prefix}`);
   app.use(config.api.prefix, createRoutes({
     userController,
     fileController,
@@ -190,8 +224,11 @@ const createApp = () => {
     personController
   }, audioStorageProvider));
 
+  logger.info('✅ Routes mounted successfully');
+
   // Serve static files (for local storage)
   if (config.storage.provider === 'local') {
+    logger.info(`Serving static files from ${config.storage.localPath} at /files`);
     app.use('/files', express.static(config.storage.localPath));
   }
 
@@ -200,6 +237,9 @@ const createApp = () => {
 
   // Global error handler (must be last)
   app.use(errorHandler);
+
+  logger.info('✅ Error handlers registered');
+  logger.info('Express application initialization complete');
 
   return app;
 };
