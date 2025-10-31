@@ -337,11 +337,7 @@ class MeetingService extends BaseService {
       // Verify ownership through project
       this.authorizationService.verifyMeetingOwnership(meeting, userId);
 
-      // Get transcription count
-      const transcriptionsCount = await this.transcriptionDataService.getTranscriptionCount(meetingId);
-
       const meetingData = meeting.toSafeObject();
-      meetingData.transcriptionsCount = transcriptionsCount;
 
       this.logSuccess('Meeting retrieved', {
         meetingId,
@@ -748,12 +744,9 @@ class MeetingService extends BaseService {
       // Verify ownership
       this.authorizationService.verifyMeetingOwnership(meeting, userId);
 
-      const transcriptionsCount = await this.transcriptionDataService.getTranscriptionCount(meetingId);
-
       return {
         status: meeting.transcriptionStatus,
         progress: meeting.transcriptionProgress,
-        transcriptionsCount,
         estimatedCompletionTime: meeting.transcriptionStatus === 'processing'
           ? new Date(Date.now() + 30000) // Estimate 30 seconds remaining
           : null

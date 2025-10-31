@@ -237,30 +237,12 @@ meetingSchema.methods.updateTranscriptionProgress = async function (status, prog
   await this.save();
 };
 
-// Static method to get meetings with transcription count
+// Static method to get meetings with pagination
 meetingSchema.statics.findWithTranscriptionCount = async function (query, options = {}) {
   const { page = 1, limit = 10, sort = '-createdAt' } = options;
 
   const meetings = await this.aggregate([
     { $match: query },
-    {
-      $lookup: {
-        from: 'transcriptions',
-        localField: '_id',
-        foreignField: 'meetingId',
-        as: 'transcriptionsData'
-      }
-    },
-    {
-      $addFields: {
-        transcriptionsCount: { $size: '$transcriptionsData' }
-      }
-    },
-    {
-      $project: {
-        transcriptionsData: 0
-      }
-    },
     { $sort: this._parseSortString(sort) },
     { $skip: (page - 1) * limit },
     { $limit: limit }
