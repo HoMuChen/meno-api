@@ -735,6 +735,19 @@ Summarize the final outcomes and what was agreed upon.
         model: this.model
       });
 
+      // Get meeting details for context (including createdAt)
+      const meeting = await this.meetingService.getMeetingById(meetingId);
+      const meetingDateTime = meeting.createdAt || new Date();
+      const usedFallback = !meeting.createdAt;
+
+      this.logger.info('Meeting datetime for action items context', {
+        meetingId,
+        createdAt: meeting.createdAt,
+        meetingDateTimeISO: meetingDateTime.toISOString(),
+        usedFallback,
+        currentDateTimeISO: new Date().toISOString()
+      });
+
       // Get all transcription segments
       const transcriptionData = await this.transcriptionDataService.getTranscriptions(meetingId, {
         page: 1,
@@ -772,6 +785,10 @@ Summarize the final outcomes and what was agreed upon.
 
       const prompt = `Based on this meeting transcript, extract action items.
 
+**CRITICAL: This meeting occurred on ${meetingDateTime.toISOString()}**
+
+When calculating due dates, you MUST use ${meetingDateTime.toISOString()} as your reference point, NOT the current date/time.
+
 IMPORTANT: Generate the action items in the SAME LANGUAGE as the transcript text.
 
 ${peopleInTranscript.length > 0 ? `Available People (for assignee matching):
@@ -785,7 +802,7 @@ Return ONLY a JSON array with this exact structure:
   {
     "task": "Brief description of the action item - in same language as transcript",
     "assignee": "Person responsible (use name from Available People list if mentioned, otherwise null)",
-    "dueDate": "Due date or deadline (if mentioned, otherwise null)",
+    "dueDate": "ISO 8601 datetime string (e.g., '2024-01-15T09:00:00.000Z') if deadline mentioned, otherwise null",
     "context": "Brief context or related discussion point (optional)"
   }
 ]
@@ -794,6 +811,13 @@ Guidelines:
 - Only include explicit action items or clear commitments
 - Include implicit tasks if strongly indicated by the discussion
 - Match assignee to Available People list when possible
+- **CRITICAL FOR dueDate**: Calculate all relative dates from the MEETING DATE (${meetingDateTime.toISOString()}), NOT from today
+- Examples of date calculation (assuming meeting date is ${meetingDateTime.toISOString()}):
+  * "by next week" = 7 days AFTER the meeting date
+  * "in 3 days" = 3 days AFTER the meeting date
+  * "by Friday" = the Friday AFTER the meeting date
+  * "tomorrow" = 1 day AFTER the meeting date
+- For dueDate: If no specific deadline is mentioned, set to null
 - Prioritize based on discussion urgency
 - Return empty array [] if no action items found
 - DO NOT include markdown formatting or code blocks

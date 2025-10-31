@@ -37,8 +37,8 @@ const mongoose = require('mongoose');
  *           maxLength: 100
  *         dueDate:
  *           type: string
- *           description: Due date or deadline as free text
- *           maxLength: 100
+ *           format: date-time
+ *           description: Due date or deadline as ISO 8601 datetime
  *         context:
  *           type: string
  *           description: Additional context or related discussion point
@@ -88,10 +88,8 @@ const actionItemSchema = new mongoose.Schema(
       maxlength: [100, 'Assignee name cannot exceed 100 characters']
     },
     dueDate: {
-      type: String,
-      default: null,
-      trim: true,
-      maxlength: [100, 'Due date cannot exceed 100 characters']
+      type: Date,
+      default: null
     },
     context: {
       type: String,

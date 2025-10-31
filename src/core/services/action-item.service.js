@@ -19,12 +19,50 @@ class ActionItemService extends BaseService {
    */
   async createActionItems(meetingId, actionItemsData) {
     try {
+      this.logger.info('createActionItems called', {
+        meetingId,
+        itemCount: actionItemsData.length,
+        sampleItem: actionItemsData.length > 0 ? {
+          task: actionItemsData[0].task?.substring(0, 50),
+          assignee: actionItemsData[0].assignee,
+          personId: actionItemsData[0].personId,
+          dueDate: actionItemsData[0].dueDate,
+          dueDateType: typeof actionItemsData[0].dueDate,
+          userId: actionItemsData[0].userId
+        } : null
+      });
+
       const items = actionItemsData.map(item => ({
         ...item,
         meetingId
       }));
 
+      this.logger.info('Items prepared for bulkInsert', {
+        meetingId,
+        itemCount: items.length,
+        samplePreparedItem: items.length > 0 ? {
+          meetingId: items[0].meetingId,
+          userId: items[0].userId,
+          task: items[0].task?.substring(0, 50),
+          assignee: items[0].assignee,
+          personId: items[0].personId,
+          dueDate: items[0].dueDate,
+          dueDateType: typeof items[0].dueDate
+        } : null
+      });
+
       const savedActionItems = await this.ActionItem.bulkInsert(items);
+
+      this.logger.info('bulkInsert completed', {
+        meetingId,
+        requestedCount: items.length,
+        savedCount: savedActionItems.length,
+        savedItems: savedActionItems.map(item => ({
+          _id: item._id,
+          task: item.task?.substring(0, 50),
+          dueDate: item.dueDate
+        }))
+      });
 
       this.logSuccess('Action items created', {
         meetingId,
@@ -33,6 +71,14 @@ class ActionItemService extends BaseService {
 
       return savedActionItems;
     } catch (error) {
+      this.logger.error('Error in createActionItems', {
+        error: error.message,
+        stack: error.stack,
+        meetingId,
+        itemCount: actionItemsData.length,
+        errorDetails: error.writeErrors || error.errors || 'No additional error details'
+      });
+
       this.logAndThrow(error, 'Create action items', { meetingId, itemCount: actionItemsData.length });
     }
   }

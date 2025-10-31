@@ -972,11 +972,24 @@ class MeetingService extends BaseService {
     try {
       this.logger.info('Starting action items generation', { meetingId });
 
-      const meeting = await Meeting.findById(meetingId);
+      const meeting = await Meeting.findById(meetingId).populate('projectId');
 
       if (!meeting) {
         throw new Error('Meeting not found');
       }
+
+      // Get userId from populated project
+      const userId = meeting.projectId?.userId;
+
+      if (!userId) {
+        throw new Error('Unable to determine userId for action items');
+      }
+
+      this.logger.info('User ID retrieved for action items', {
+        meetingId,
+        userId,
+        projectId: meeting.projectId?._id
+      });
 
       // Update progress
       meeting.actionItemsProgress = 10;
@@ -984,6 +997,17 @@ class MeetingService extends BaseService {
 
       // Generate action items using LLM
       const llmActionItems = await this.transcriptionService.generateActionItems(meetingId);
+
+      this.logger.info('Raw action items from LLM', {
+        meetingId,
+        count: llmActionItems.length,
+        items: llmActionItems.map(item => ({
+          task: item.task?.substring(0, 50),
+          assignee: item.assignee,
+          dueDate: item.dueDate,
+          dueDateType: typeof item.dueDate
+        }))
+      });
 
       meeting.actionItemsProgress = 60;
       await meeting.save();
@@ -999,6 +1023,44 @@ class MeetingService extends BaseService {
         .forEach(t => {
           nameToPersonId.set(t.personId.name.toLowerCase(), t.personId._id);
         });
+
+      // Helper function to parse dueDate string to Date object
+      const parseDueDate = (dueDateStr) => {
+        if (!dueDateStr || dueDateStr === null || dueDateStr === 'null') {
+          this.logger.debug('No dueDate provided', { dueDateStr });
+          return null;
+        }
+
+        try {
+          // Try parsing as ISO 8601 datetime
+          const parsedDate = new Date(dueDateStr);
+
+          // Check if date is valid
+          if (isNaN(parsedDate.getTime())) {
+            this.logger.warn('Invalid dueDate format, skipping', {
+              meetingId,
+              dueDateStr,
+              dueDateType: typeof dueDateStr
+            });
+            return null;
+          }
+
+          this.logger.debug('Successfully parsed dueDate', {
+            meetingId,
+            original: dueDateStr,
+            parsed: parsedDate.toISOString()
+          });
+
+          return parsedDate;
+        } catch (error) {
+          this.logger.warn('Error parsing dueDate', {
+            meetingId,
+            dueDateStr,
+            error: error.message
+          });
+          return null;
+        }
+      };
 
       // Match assignee names to personIds and prepare for insertion
       const actionItemsToCreate = llmActionItems.map(item => {
@@ -1021,11 +1083,29 @@ class MeetingService extends BaseService {
           }
         }
 
+        // Parse dueDate string to Date object
+        const dueDate = parseDueDate(item.dueDate);
+
         return {
           ...item,
+          dueDate,
           personId,
-          userId: meeting.userId
+          userId
         };
+      });
+
+      this.logger.info('Mapped action items ready for insertion', {
+        meetingId,
+        count: actionItemsToCreate.length,
+        items: actionItemsToCreate.map(item => ({
+          task: item.task?.substring(0, 50),
+          assignee: item.assignee,
+          personId: item.personId,
+          dueDate: item.dueDate,
+          dueDateType: typeof item.dueDate,
+          dueDateIsDate: item.dueDate instanceof Date,
+          userId: item.userId
+        }))
       });
 
       meeting.actionItemsProgress = 80;
@@ -1033,22 +1113,37 @@ class MeetingService extends BaseService {
 
       // Save action items to database
       if (actionItemsToCreate.length > 0) {
-        await this.actionItemService.createActionItems(meetingId, actionItemsToCreate);
+        this.logger.info('Calling actionItemService.createActionItems', {
+          meetingId,
+          itemCount: actionItemsToCreate.length
+        });
+
+        const savedItems = await this.actionItemService.createActionItems(meetingId, actionItemsToCreate);
+
+        this.logger.info('Action items saved successfully', {
+          meetingId,
+          requestedCount: actionItemsToCreate.length,
+          savedCount: savedItems?.length || 0
+        });
+      } else {
+        this.logger.warn('No action items to create after mapping', { meetingId });
       }
 
       // Update meeting to completed
+      const finalCount = actionItemsToCreate.length;
       meeting.actionItemsStatus = 'completed';
       meeting.actionItemsProgress = 100;
       meeting.metadata = meeting.metadata || {};
       meeting.metadata.actionItems = {
         generatedAt: new Date(),
-        count: actionItemsToCreate.length
+        count: finalCount
       };
       await meeting.save();
 
       this.logger.info('Action items generation completed', {
         meetingId,
-        count: actionItemsToCreate.length
+        count: finalCount,
+        requestedCount: llmActionItems.length
       });
     } catch (error) {
       this.logger.error('Error processing action items generation', {
