@@ -241,9 +241,56 @@ const createTranscriptionRoutes = (transcriptionController) => {
   /**
    * @swagger
    * /api/meetings/{meetingId}/transcriptions/{id}:
+   *   patch:
+   *     summary: Update transcription (partial update)
+   *     description: Partially update transcription speaker name or text content. Only provided fields will be updated.
+   *     tags: [Transcriptions]
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: meetingId
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: Meeting ID
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: Transcription ID
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             properties:
+   *               speaker:
+   *                 type: string
+   *                 maxLength: 100
+   *                 example: "John Doe"
+   *               text:
+   *                 type: string
+   *                 maxLength: 5000
+   *                 example: "We need to prioritize the authentication feature"
+   *     responses:
+   *       200:
+   *         description: Transcription updated successfully
+   *       400:
+   *         description: Validation error
+   *       401:
+   *         description: Unauthorized
+   *       404:
+   *         description: Transcription not found
    *   put:
-   *     summary: Update transcription
-   *     description: Edit transcription speaker name or text content
+   *     summary: Update transcription (deprecated - use PATCH)
+   *     description: |
+   *       **DEPRECATED**: Please use PATCH instead for partial updates.
+   *
+   *       Edit transcription speaker name or text content. This endpoint implements partial update semantics but will be removed in v2.0.
+   *     deprecated: true
    *     tags: [Transcriptions]
    *     security:
    *       - bearerAuth: []
@@ -285,6 +332,7 @@ const createTranscriptionRoutes = (transcriptionController) => {
    *       404:
    *         description: Transcription not found
    */
+  router.patch('/:id', validateUpdateTranscription, transcriptionController.update);
   router.put('/:id', validateUpdateTranscription, transcriptionController.update);
 
   /**

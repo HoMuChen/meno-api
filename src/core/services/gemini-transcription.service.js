@@ -71,17 +71,25 @@ class GeminiTranscriptionService extends TranscriptionService {
       const meeting = await this.meetingService.getMeetingById(meetingId);
       const estimatedTotal = this._calculateEstimatedSegments(meeting.duration);
 
+      // Calculate audio duration in milliseconds for LLM context
+      const durationMs = meeting.duration ? Math.round(meeting.duration * 1000) : null;
+
       await this._updateTranscriptionMetadata(meetingId, {
         startedAt: new Date(),
+        audioDuration: meeting.duration, // in seconds
+        audioDurationMs: durationMs, // in milliseconds
         estimatedTotal,
         processedSegments: 0
       });
 
       // Initialize Gemini model for transcription (requires audio processing capabilities)
       const model = this.genAI.getGenerativeModel({ model: this.transcriptionModel });
+      const durationInfo = durationMs
+        ? `\n\n** AUDIO DURATION: ${meeting.duration} seconds (${durationMs} milliseconds) **`
+        : '';
 
       // Prepare streaming request with newline-delimited JSON format for true incremental processing
-      const prompt = `Transcribe this audio file with speaker diarization and timestamps.
+      const prompt = `Transcribe this audio file with speaker diarization and timestamps.${durationInfo}
 
 CRITICAL: Return the transcription as NEWLINE-DELIMITED JSON where EACH LINE is a separate JSON object.
 
@@ -90,6 +98,15 @@ Each line must be a complete, valid JSON object with these fields:
 - endTime: end timestamp in milliseconds
 - speaker: speaker identifier (e.g., "SPEAKER_01", "SPEAKER_02")
 - text: the transcribed text
+
+IMPORTANT TIMESTAMP REQUIREMENTS:${durationMs ? `
+- All startTime values MUST be between 0 and ${durationMs} milliseconds
+- All endTime values MUST be between 0 and ${durationMs} milliseconds
+- Timestamps MUST progress chronologically (each segment starts at or after the previous segment ends)
+- Expected approximately ${estimatedTotal} segments total
+- Ensure timestamps are accurately distributed across the entire audio duration` : `
+- Timestamps must progress chronologically
+- Ensure accurate timestamp distribution`}
 
 IMPORTANT FORMAT REQUIREMENTS:
 - Output ONE JSON object per line
@@ -122,6 +139,7 @@ Do NOT use array format. Each line must be parseable independently.`;
       let processedSegments = 0;
       let lineBuffer = ''; // Buffer for incomplete lines between chunks
       let segmentBuffer = null; // Buffer for merging consecutive same-speaker segments
+      let lastEndTime = 0; // Track last segment's end time for monotonic validation
       let lastChunkTime = Date.now();
 
       // Set up stall detection
@@ -156,10 +174,11 @@ Do NOT use array format. Each line must be parseable independently.`;
             bufferSize: lineBuffer.length
           });
 
-          // Process new segments with speaker merging
+          // Process new segments with speaker merging and timestamp validation
           for (const rawSegment of parsedSegments) {
-            const segment = this._mapGeminiSegment(rawSegment);
+            const segment = this._mapGeminiSegment(rawSegment, durationMs, lastEndTime);
             segments.push(segment);
+            lastEndTime = segment.endTime; // Update for next iteration
 
             // Merge consecutive segments with same speaker
             if (!segmentBuffer) {
@@ -221,8 +240,9 @@ Do NOT use array format. Each line must be parseable independently.`;
 
         if (finalSegments.length > 0) {
           for (const rawSegment of finalSegments) {
-            const segment = this._mapGeminiSegment(rawSegment);
+            const segment = this._mapGeminiSegment(rawSegment, durationMs, lastEndTime);
             segments.push(segment);
+            lastEndTime = segment.endTime; // Update for next iteration
 
             // Apply same merging logic to final segments
             if (!segmentBuffer) {
@@ -406,14 +426,73 @@ Do NOT use array format. Each line must be parseable independently.`;
   }
 
   /**
-   * Map Gemini segment format to application format
+   * Map Gemini segment format to application format with timestamp validation
    * @param {Object} geminiSegment - Segment from Gemini API
+   * @param {number} durationMs - Audio duration in milliseconds (optional, for validation)
+   * @param {number} lastEndTime - End time of previous segment (optional, for monotonic validation)
    * @returns {Object} Mapped segment
    */
-  _mapGeminiSegment(geminiSegment) {
+  _mapGeminiSegment(geminiSegment, durationMs = null, lastEndTime = null) {
+    let startTime = geminiSegment.startTime || 0;
+    let endTime = geminiSegment.endTime || 0;
+
+    // Validate and correct timestamps if duration is provided
+    if (durationMs !== null && durationMs > 0) {
+      const originalStart = startTime;
+      const originalEnd = endTime;
+
+      // Cap startTime at duration
+      if (startTime > durationMs) {
+        this.logger.warn('Segment startTime exceeds audio duration, capping to duration', {
+          originalStart: startTime,
+          cappedStart: durationMs,
+          duration: durationMs,
+          text: geminiSegment.text?.substring(0, 50)
+        });
+        startTime = durationMs;
+      }
+
+      // Cap endTime at duration
+      if (endTime > durationMs) {
+        this.logger.warn('Segment endTime exceeds audio duration, capping to duration', {
+          originalEnd: endTime,
+          cappedEnd: durationMs,
+          duration: durationMs,
+          text: geminiSegment.text?.substring(0, 50)
+        });
+        endTime = durationMs;
+      }
+
+      // Ensure endTime > startTime
+      if (endTime <= startTime) {
+        this.logger.warn('Invalid segment: endTime <= startTime, adjusting', {
+          startTime,
+          endTime,
+          text: geminiSegment.text?.substring(0, 50)
+        });
+        // Set a minimum 1-second segment duration
+        endTime = Math.min(startTime + 1000, durationMs);
+      }
+
+      // Validate monotonic progression if lastEndTime provided
+      if (lastEndTime !== null && startTime < lastEndTime) {
+        this.logger.warn('Segment startTime before previous endTime, adjusting', {
+          originalStart: startTime,
+          adjustedStart: lastEndTime,
+          lastEndTime,
+          text: geminiSegment.text?.substring(0, 50)
+        });
+        startTime = lastEndTime;
+        // Ensure endTime is still after adjusted startTime
+        if (endTime <= startTime) {
+          endTime = Math.min(startTime + 1000, durationMs);
+        }
+      }
+    }
+
     return {
-      startTime: geminiSegment.startTime || 0,
-      endTime: geminiSegment.endTime || 0,
+      startTime,
+      endTime,
       speaker: this._mapSpeakerLabel(geminiSegment.speaker),
       text: geminiSegment.text || ''
     };
