@@ -9,6 +9,7 @@ const mongoose = require('mongoose');
 const path = require('path');
 const BaseService = require('./base.service');
 const { getAudioDuration, getAudioDurationFromStorage } = require('../utils/audio-utils');
+const queueService = require('../queue/queue.service');
 
 class MeetingService extends BaseService {
   constructor(logger, fileService, projectService, transcriptionService, transcriptionDataService, audioStorageProvider, authorizationService, actionItemService) {
@@ -232,9 +233,9 @@ class MeetingService extends BaseService {
 
     this.logger.info('Auto-starting transcription', { meetingId });
 
-    // Fire and forget - process transcription asynchronously
-    this._processTranscription(meetingId, audioFileUri).catch(error => {
-      this.logger.error('Auto-transcription failed', {
+    // Enqueue transcription job
+    queueService.enqueueTranscription(meetingId, audioFileUri).catch(error => {
+      this.logger.error('Failed to enqueue auto-transcription job', {
         error: error.message,
         meetingId
       });
@@ -468,225 +469,29 @@ class MeetingService extends BaseService {
         throw new Error('Transcription already in progress');
       }
 
-      // Update status to processing
-      await meeting.updateTranscriptionProgress('processing', 0);
+      // Update status to pending (will be updated to processing by worker)
+      await meeting.updateTranscriptionProgress('pending', 0);
 
-      this.logSuccess('Transcription started', {
+      // Enqueue transcription job - route to large queue if duration > 40 minutes
+      const isLargeTranscription = meeting.duration && meeting.duration > 40 * 60; // 40 minutes
+      const jobInfo = isLargeTranscription
+        ? await queueService.enqueueTranscriptionLarge(meetingId, meeting.audioFile)
+        : await queueService.enqueueTranscription(meetingId, meeting.audioFile);
+
+      this.logSuccess('Transcription job enqueued', {
         meetingId,
-        userId
-      });
-
-      // Start async transcription process
-      this._processTranscription(meetingId, meeting.audioFile).catch(error => {
-        this.logger.error('Transcription process error', {
-          error: error.message,
-          meetingId
-        });
+        userId,
+        jobId: jobInfo.jobId
       });
 
       return {
         meetingId,
-        status: 'processing',
+        status: 'pending',
         progress: 0,
         estimatedCompletionTime: new Date(Date.now() + this.transcriptionService.estimateTranscriptionTime(meeting.duration || 60) * 1000)
       };
     } catch (error) {
       this.logAndThrow(error, 'Start transcription', { meetingId, userId });
-    }
-  }
-
-  /**
-   * Get audio file path for transcription processing
-   * @param {string} audioFileUri - Storage URI
-   * @returns {Promise<string>} Local file path for transcription
-   * @private
-   */
-  async _getAudioFilePath(audioFileUri) {
-    try {
-      // For local storage, get the absolute path
-      if (audioFileUri.startsWith('local://')) {
-        return this.audioStorageProvider.getAbsolutePath(audioFileUri);
-      }
-
-      // For cloud storage, download to temp location
-      const audioData = await this.audioStorageProvider.download(audioFileUri);
-      const tempPath = path.join(
-        process.env.LOCAL_STORAGE_PATH || './storage',
-        'temp',
-        `transcription-${Date.now()}.audio`
-      );
-
-      // Ensure temp directory exists
-      const fs = require('fs').promises;
-      const tempDir = path.dirname(tempPath);
-      await fs.mkdir(tempDir, { recursive: true });
-
-      // Write to temp file
-      await fs.writeFile(tempPath, audioData);
-
-      return tempPath;
-    } catch (error) {
-      this.logger.error('Failed to get audio file path', {
-        error: error.message,
-        audioFileUri
-      });
-      throw error;
-    }
-  }
-
-  /**
-   * Retry transcription with exponential backoff for 503 errors
-   * @param {Function} transcribeFn - Transcription function to call
-   * @param {number} maxRetries - Maximum number of retries (default: 3)
-   * @param {number} initialDelay - Initial delay in ms (default: 5000)
-   * @returns {Promise} Transcription result
-   * @private
-   */
-  async _retryTranscription(transcribeFn, maxRetries = 3, initialDelay = 5000) {
-    for (let attempt = 0; attempt <= maxRetries; attempt++) {
-      try {
-        return await transcribeFn();
-      } catch (error) {
-        const is503Error = error.message && error.message.includes('503') && error.message.includes('overloaded');
-        const isLastAttempt = attempt === maxRetries;
-
-        if (!is503Error || isLastAttempt) {
-          throw error; // Re-throw if not 503 or last attempt
-        }
-
-        const delay = initialDelay * Math.pow(2, attempt); // Exponential backoff
-        this.logger.warn('Gemini API overloaded (503), retrying...', {
-          attempt: attempt + 1,
-          maxRetries,
-          retryAfter: `${delay}ms`,
-          error: error.message
-        });
-
-        await new Promise(resolve => setTimeout(resolve, delay));
-      }
-    }
-  }
-
-  /**
-   * Process transcription asynchronously
-   * @param {string} meetingId - Meeting ID
-   * @param {string} audioFileUri - Storage URI for audio file
-   * @private
-   */
-  async _processTranscription(meetingId, audioFileUri) {
-    let tempFilePath = null;
-
-    try {
-      this.logger.info('Processing transcription', {
-        meetingId,
-        audioFileUri
-      });
-
-      // Get local file path for transcription
-      const audioFilePath = await this._getAudioFilePath(audioFileUri);
-      tempFilePath = !audioFileUri.startsWith('local://') ? audioFilePath : null;
-
-      this.logger.debug('Calling transcription service', {
-        audioFilePath,
-        meetingId,
-        serviceType: this.transcriptionService.constructor.name
-      });
-
-      // Call transcription service with retry logic for 503 errors
-      // For Gemini streaming: service handles incremental saves internally
-      // For mock service: returns all segments at once
-      const segments = await this._retryTranscription(async () => {
-        return await this.transcriptionService.transcribeAudio(
-          audioFilePath,
-          meetingId // Pass meetingId for Gemini streaming progress updates
-        );
-      });
-
-      this.logger.debug('Transcription service returned', {
-        meetingId,
-        segmentsCount: segments?.length || 0,
-        segmentsType: typeof segments
-      });
-
-      // For non-streaming providers (mock), save all segments at once
-      if (segments && segments.length > 0) {
-        // Check if segments are already saved (by streaming provider)
-        const existingCount = await this.transcriptionDataService.getTranscriptionCount(meetingId);
-
-        if (existingCount === 0) {
-          // Not saved yet, save them now (mock provider path)
-          await this.transcriptionDataService.saveTranscriptions(meetingId, segments);
-        }
-      }
-
-      // Update meeting status to completed
-      // (Gemini streaming already sets this, but safe to set again)
-      const meeting = await Meeting.findById(meetingId);
-      if (meeting && meeting.transcriptionStatus !== 'completed') {
-        await meeting.updateTranscriptionProgress('completed', 100);
-      }
-
-      // Generate title and description for non-streaming services (e.g., Mock)
-      // Note: Gemini streaming service generates this internally during transcribeAudio
-      if (this.transcriptionService.constructor.name === 'MockTranscriptionService') {
-        this.logger.info('Generating title and description for mock transcription', { meetingId });
-        try {
-          // Use Gemini service to generate title/description from the mock transcription
-          const geminiService = require('./gemini-transcription.service');
-          if (geminiService && typeof geminiService.prototype.generateTitleAndDescription === 'function') {
-            // We'll implement this in a simpler way - just set a default title
-            const meetingDoc = await this._getMeetingByIdInternal(meetingId);
-            if (!meetingDoc.description || meetingDoc.description.trim() === '') {
-              meetingDoc.description = 'Mock transcription completed';
-              await meetingDoc.save();
-              this.logger.info('Updated mock meeting with default description', { meetingId });
-            }
-          }
-        } catch (summaryError) {
-          this.logger.warn('Failed to generate title/description for mock transcription', {
-            meetingId,
-            error: summaryError.message
-          });
-        }
-      }
-
-      this.logger.info('Transcription completed', {
-        meetingId,
-        segmentsCount: segments.length
-      });
-
-      // Clean up temp file if downloaded
-      if (tempFilePath) {
-        const fs = require('fs').promises;
-        await fs.unlink(tempFilePath).catch(err =>
-          this.logger.warn('Failed to delete temp file', { tempFilePath, error: err.message })
-        );
-      }
-    } catch (error) {
-      this.logger.error('Transcription processing failed', {
-        error: error.message,
-        stack: error.stack,
-        meetingId,
-        audioFileUri
-      });
-
-      // Update meeting status to failed
-      // (Gemini streaming already sets this on error, but safe to set again)
-      const meeting = await Meeting.findById(meetingId);
-      if (meeting && meeting.transcriptionStatus !== 'failed') {
-        meeting.metadata = meeting.metadata || {};
-        meeting.metadata.transcription = meeting.metadata.transcription || {};
-        meeting.metadata.transcription.errorMessage = error.message;
-        await meeting.updateTranscriptionProgress('failed', 0);
-      }
-
-      // Clean up temp file on error
-      if (tempFilePath) {
-        const fs = require('fs').promises;
-        await fs.unlink(tempFilePath).catch(err =>
-          this.logger.warn('Failed to delete temp file', { tempFilePath, error: err.message })
-        );
-      }
     }
   }
 

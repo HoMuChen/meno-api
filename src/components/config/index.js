@@ -13,6 +13,13 @@ const config = {
     options: {}
   },
 
+  redis: {
+    host: process.env.REDIS_HOST || 'localhost',
+    port: parseInt(process.env.REDIS_PORT, 10) || 6379,
+    password: process.env.REDIS_PASSWORD || undefined,
+    db: parseInt(process.env.REDIS_DB, 10) || 0
+  },
+
   storage: {
     provider: process.env.STORAGE_PROVIDER || 'local',
     localPath: process.env.LOCAL_STORAGE_PATH || './storage',
