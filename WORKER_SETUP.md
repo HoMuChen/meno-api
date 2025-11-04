@@ -284,7 +284,7 @@ docker-compose logs -f worker
    ```
 4. **Use PM2 for process management**:
    ```bash
-   pm2 start src/worker/index.js --name meno-worker
+   pm2 start src/worker/index.js --name worker
    pm2 save
    ```
 

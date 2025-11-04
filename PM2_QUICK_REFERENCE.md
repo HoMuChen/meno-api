@@ -22,9 +22,9 @@ npm run pm2:status
 
 | Process | Description | Instances | Concurrency | Memory |
 |---------|-------------|-----------|-------------|--------|
-| `meno-api` | HTTP API Server | 2 (cluster) | N/A | 500MB |
-| `meno-worker-transcription` | Regular transcriptions (≤40min) | 1 | 5 jobs | 1GB |
-| `meno-worker-transcription-large` | Large transcriptions (>40min) | 1 | 2 jobs | 2GB |
+| `api` | HTTP API Server | 2 (cluster) | N/A | 500MB |
+| `worker-transcription` | Regular transcriptions (≤40min) | 1 | 5 jobs | 1GB |
+| `worker-transcription-large` | Large transcriptions (>40min) | 1 | 2 jobs | 2GB |
 
 ## NPM Scripts
 
@@ -45,21 +45,21 @@ npm run pm2:monit          # Real-time monitoring
 ### Start/Stop
 ```bash
 # Start
-pm2 start ecosystem.config.js
-pm2 start ecosystem.config.js --only meno-api
-pm2 start ecosystem.config.js --only meno-worker-transcription
+pm2 start ecosystem.config.yml
+pm2 start ecosystem.config.yml --only api
+pm2 start ecosystem.config.yml --only worker-transcription
 
 # Stop
 pm2 stop all
-pm2 stop meno-api
-pm2 stop meno-worker-transcription
+pm2 stop api
+pm2 stop worker-transcription
 
 # Restart
 pm2 restart all
-pm2 restart meno-api
+pm2 restart api
 
 # Graceful reload (zero-downtime)
-pm2 reload meno-api
+pm2 reload api
 ```
 
 ### Monitoring
@@ -70,7 +70,7 @@ pm2 list
 
 # View logs
 pm2 logs                              # All processes
-pm2 logs meno-api                     # Specific process
+pm2 logs api                     # Specific process
 pm2 logs --lines 50                   # Last 50 lines
 pm2 logs --err                        # Error logs only
 
@@ -78,18 +78,18 @@ pm2 logs --err                        # Error logs only
 pm2 monit
 
 # Process details
-pm2 show meno-api
-pm2 describe meno-worker-transcription
+pm2 show api
+pm2 describe worker-transcription
 ```
 
 ### Scaling
 ```bash
 # Scale workers
-pm2 scale meno-worker-transcription 3
-pm2 scale meno-worker-transcription-large 2
+pm2 scale worker-transcription 3
+pm2 scale worker-transcription-large 2
 
 # Scale API (cluster mode)
-pm2 scale meno-api 4
+pm2 scale api 4
 ```
 
 ### Persistence
@@ -108,13 +108,13 @@ pm2 unstartup
 ```bash
 git pull
 npm install
-pm2 reload ecosystem.config.js  # Zero-downtime reload
+pm2 reload ecosystem.config.yml  # Zero-downtime reload
 ```
 
 ### Check Worker Health
 ```bash
-pm2 logs meno-worker-transcription --lines 20
-pm2 describe meno-worker-transcription
+pm2 logs worker-transcription --lines 20
+pm2 describe worker-transcription
 ```
 
 ### Check Queue Status
@@ -128,7 +128,7 @@ LLEN bull:transcription-large-queue:wait
 ### View API Logs
 ```bash
 # PM2 logs
-pm2 logs meno-api
+pm2 logs api
 
 # Winston logs (NODE_ENV=production)
 tail -f logs/combined.log
@@ -137,8 +137,8 @@ tail -f logs/error.log
 
 ### Restart After Error
 ```bash
-pm2 restart meno-worker-transcription
-pm2 logs meno-worker-transcription --lines 50
+pm2 restart worker-transcription
+pm2 logs worker-transcription --lines 50
 ```
 
 ## Troubleshooting
@@ -155,12 +155,12 @@ node src/worker/index.js --type transcription -c 2  # Test worker
 ```bash
 pm2 list  # Check memory
 pm2 restart <process-name>
-# Adjust max_memory_restart in ecosystem.config.js
+# Adjust max_memory_restart in ecosystem.config.yml
 ```
 
 ### Worker Stuck
 ```bash
-pm2 restart meno-worker-transcription
+pm2 restart worker-transcription
 redis-cli KEYS bull:transcription-queue:*
 # Check Redis connection
 redis-cli ping
@@ -187,7 +187,7 @@ pm2 set pm2-logrotate:compress true
 ## Production Deployment Checklist
 
 - [ ] Install PM2: `npm install -g pm2`
-- [ ] Start services: `pm2 start ecosystem.config.js`
+- [ ] Start services: `pm2 start ecosystem.config.yml`
 - [ ] Verify status: `pm2 status`
 - [ ] Check logs: `pm2 logs`
 - [ ] Enable auto-start: `pm2 startup && pm2 save`
@@ -198,8 +198,8 @@ pm2 set pm2-logrotate:compress true
 ## File Locations
 
 ```
-meno-api/
-├── ecosystem.config.js          # PM2 configuration (JavaScript)
+api/
+├── ecosystem.config.yml          # PM2 configuration (JavaScript)
 ├── ecosystem.config.yml         # PM2 configuration (YAML)
 ├── PM2_DEPLOYMENT.md            # Comprehensive deployment guide
 ├── PM2_QUICK_REFERENCE.md       # This file

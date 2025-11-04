@@ -24,16 +24,16 @@ pm2 --version
 
 ```bash
 # Production mode (recommended)
-pm2 start ecosystem.config.js
+pm2 start ecosystem.config.yml
 
 # Development mode
-pm2 start ecosystem.config.js --env development
+pm2 start ecosystem.config.yml --env development
 ```
 
 This starts:
-- **meno-api**: HTTP API server (2 instances, cluster mode)
-- **meno-worker-transcription**: Regular transcription worker (≤40 min meetings)
-- **meno-worker-transcription-large**: Large transcription worker (>40 min meetings)
+- **api**: HTTP API server (2 instances, cluster mode)
+- **worker-transcription**: Regular transcription worker (≤40 min meetings)
+- **worker-transcription-large**: Large transcription worker (>40 min meetings)
 
 ### Check Status
 
@@ -42,9 +42,9 @@ This starts:
 pm2 status
 
 # Detailed info
-pm2 show meno-api
-pm2 show meno-worker-transcription
-pm2 show meno-worker-transcription-large
+pm2 show api
+pm2 show worker-transcription
+pm2 show worker-transcription-large
 ```
 
 ### View Logs
@@ -54,9 +54,9 @@ pm2 show meno-worker-transcription-large
 pm2 logs
 
 # Specific process
-pm2 logs meno-api
-pm2 logs meno-worker-transcription
-pm2 logs meno-worker-transcription-large
+pm2 logs api
+pm2 logs worker-transcription
+pm2 logs worker-transcription-large
 
 # Last 200 lines
 pm2 logs --lines 200
@@ -71,23 +71,23 @@ pm2 logs --raw
 
 ```bash
 # Start specific process
-pm2 start ecosystem.config.js --only meno-api
-pm2 start ecosystem.config.js --only meno-worker-transcription
-pm2 start ecosystem.config.js --only meno-worker-transcription-large
+pm2 start ecosystem.config.yml --only api
+pm2 start ecosystem.config.yml --only worker-transcription
+pm2 start ecosystem.config.yml --only worker-transcription-large
 
 # Stop specific process
-pm2 stop meno-api
-pm2 stop meno-worker-transcription
+pm2 stop api
+pm2 stop worker-transcription
 
 # Restart specific process
-pm2 restart meno-api
-pm2 restart meno-worker-transcription
+pm2 restart api
+pm2 restart worker-transcription
 
 # Graceful reload (zero-downtime for API)
-pm2 reload meno-api
+pm2 reload api
 
 # Delete process from PM2
-pm2 delete meno-api
+pm2 delete api
 ```
 
 ### Stop/Restart All Processes
@@ -112,9 +112,9 @@ pm2 delete all
 
 | Process | Instances | Mode | Concurrency | Memory Limit | Kill Timeout |
 |---------|-----------|------|-------------|--------------|--------------|
-| meno-api | 2 | cluster | N/A | 500MB | 5s |
-| meno-worker-transcription | 1 | fork | 5 | 1GB | 30s |
-| meno-worker-transcription-large | 1 | fork | 2 | 2GB | 60s |
+| api | 2 | cluster | N/A | 500MB | 5s |
+| worker-transcription | 1 | fork | 5 | 1GB | 30s |
+| worker-transcription-large | 1 | fork | 2 | 2GB | 60s |
 
 ### Log Files
 
@@ -134,13 +134,13 @@ Scale transcription workers based on load:
 
 ```bash
 # Add more regular transcription workers
-pm2 scale meno-worker-transcription 3  # Run 3 instances
+pm2 scale worker-transcription 3  # Run 3 instances
 
 # Add more large transcription workers
-pm2 scale meno-worker-transcription-large 2  # Run 2 instances
+pm2 scale worker-transcription-large 2  # Run 2 instances
 
 # Scale back down
-pm2 scale meno-worker-transcription 1
+pm2 scale worker-transcription 1
 ```
 
 **Note**: Each worker instance processes jobs concurrently based on `--concurrency` flag.
@@ -152,7 +152,7 @@ pm2 scale meno-worker-transcription 1
 pm2 monit
 
 # Process metrics
-pm2 describe meno-api
+pm2 describe api
 
 # CPU and memory usage
 pm2 list
@@ -162,12 +162,12 @@ pm2 list
 
 **Production**:
 ```bash
-pm2 start ecosystem.config.js --env production
+pm2 start ecosystem.config.yml --env production
 ```
 
 **Development**:
 ```bash
-pm2 start ecosystem.config.js --env development
+pm2 start ecosystem.config.yml --env development
 ```
 
 **Custom Environment**:
@@ -203,10 +203,10 @@ git pull
 npm install
 
 # Graceful reload (zero-downtime for API)
-pm2 reload ecosystem.config.js
+pm2 reload ecosystem.config.yml
 
 # OR restart all (brief downtime)
-pm2 restart ecosystem.config.js
+pm2 restart ecosystem.config.yml
 ```
 
 ## Production Best Practices
@@ -237,14 +237,14 @@ pm2 set pm2-logrotate:compress true
 pm2 monit
 
 # Check for memory leaks
-pm2 describe meno-api
+pm2 describe api
 ```
 
 ### 4. Use Process File
 
-Always use `ecosystem.config.js` for consistency:
+Always use `ecosystem.config.yml` for consistency:
 ```bash
-pm2 start ecosystem.config.js
+pm2 start ecosystem.config.yml
 ```
 
 ### 5. Graceful Shutdown
@@ -260,7 +260,7 @@ The configuration includes `kill_timeout` for graceful shutdown:
 
 ```bash
 # Start all services on one server
-pm2 start ecosystem.config.js
+pm2 start ecosystem.config.yml
 
 # Status
 pm2 status
@@ -270,13 +270,13 @@ pm2 status
 
 **Server 1** (API only):
 ```bash
-pm2 start ecosystem.config.js --only meno-api
+pm2 start ecosystem.config.yml --only api
 ```
 
 **Server 2** (Workers only):
 ```bash
-pm2 start ecosystem.config.js --only meno-worker-transcription
-pm2 start ecosystem.config.js --only meno-worker-transcription-large
+pm2 start ecosystem.config.yml --only worker-transcription
+pm2 start ecosystem.config.yml --only worker-transcription-large
 ```
 
 ### Scenario 3: High Availability (Large Scale)
@@ -285,31 +285,31 @@ pm2 start ecosystem.config.js --only meno-worker-transcription-large
 
 **API Servers** (2-3 servers):
 ```bash
-pm2 start ecosystem.config.js --only meno-api
+pm2 start ecosystem.config.yml --only api
 ```
 
 **Worker Servers** (dedicated):
 
 **Worker Server 1** (regular transcriptions):
 ```bash
-pm2 start ecosystem.config.js --only meno-worker-transcription
-pm2 scale meno-worker-transcription 3  # 3 instances
+pm2 start ecosystem.config.yml --only worker-transcription
+pm2 scale worker-transcription 3  # 3 instances
 ```
 
 **Worker Server 2** (large transcriptions):
 ```bash
-pm2 start ecosystem.config.js --only meno-worker-transcription-large
-pm2 scale meno-worker-transcription-large 2  # 2 instances
+pm2 start ecosystem.config.yml --only worker-transcription-large
+pm2 scale worker-transcription-large 2  # 2 instances
 ```
 
 ### Scenario 4: Development Environment
 
 ```bash
 # Start in development mode
-pm2 start ecosystem.config.js --env development
+pm2 start ecosystem.config.yml --env development
 
 # Lower concurrency for local development
-# (configured in ecosystem.config.js)
+# (configured in ecosystem.config.yml)
 ```
 
 ## Troubleshooting
@@ -318,10 +318,10 @@ pm2 start ecosystem.config.js --env development
 
 ```bash
 # Check logs
-pm2 logs meno-worker-transcription --lines 50
+pm2 logs worker-transcription --lines 50
 
 # Check process details
-pm2 describe meno-worker-transcription
+pm2 describe worker-transcription
 
 # Manually test worker
 node src/worker/index.js --type transcription -c 2
@@ -334,9 +334,9 @@ node src/worker/index.js --type transcription -c 2
 pm2 list
 
 # Restart if needed
-pm2 restart meno-worker-transcription
+pm2 restart worker-transcription
 
-# Adjust max_memory_restart in ecosystem.config.js
+# Adjust max_memory_restart in ecosystem.config.yml
 ```
 
 ### Worker Not Processing Jobs
@@ -348,7 +348,7 @@ redis-cli ping
 
 2. **Check worker logs**:
 ```bash
-pm2 logs meno-worker-transcription
+pm2 logs worker-transcription
 ```
 
 3. **Verify queue**:
@@ -360,7 +360,7 @@ LLEN bull:transcription-queue:wait
 
 4. **Restart worker**:
 ```bash
-pm2 restart meno-worker-transcription
+pm2 restart worker-transcription
 ```
 
 ### Process Keeps Restarting
@@ -370,9 +370,9 @@ pm2 restart meno-worker-transcription
 pm2 list
 
 # View error logs
-pm2 logs meno-worker-transcription --err
+pm2 logs worker-transcription --err
 
-# Increase min_uptime in ecosystem.config.js if app needs more startup time
+# Increase min_uptime in ecosystem.config.yml if app needs more startup time
 ```
 
 ## PM2 Commands Reference
@@ -433,10 +433,10 @@ jobs:
           username: ${{ secrets.USERNAME }}
           key: ${{ secrets.SSH_KEY }}
           script: |
-            cd /path/to/meno-api
+            cd /path/to/api
             git pull
             npm install
-            pm2 reload ecosystem.config.js
+            pm2 reload ecosystem.config.yml
 ```
 
 ## Resources
@@ -455,7 +455,7 @@ curl http://localhost:3000/health
 ### Worker Health Check
 ```bash
 # Check if workers are processing
-pm2 logs meno-worker-transcription --lines 10
+pm2 logs worker-transcription --lines 10
 
 # Check Redis queue
 redis-cli

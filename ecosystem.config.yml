@@ -1,6 +1,6 @@
 apps:
   # HTTP API Server
-  - name: meno-api
+  - name: api
     script: ./src/server.js
     instances: 2
     exec_mode: cluster
@@ -21,7 +21,7 @@ apps:
     watch: false
 
   # Regular Transcription Worker (high volume, ≤40 min meetings)
-  - name: meno-worker-transcription
+  - name: worker-transcription
     script: ./src/worker/index.js
     args: --type transcription --concurrency 5
     instances: 1
@@ -44,7 +44,7 @@ apps:
     restart_delay: 5000
 
   # Large Transcription Worker (low volume, >40 min meetings)
-  - name: meno-worker-transcription-large
+  - name: worker-transcription-large
     script: ./src/worker/index.js
     args: --type transcription-large --concurrency 2
     instances: 1
