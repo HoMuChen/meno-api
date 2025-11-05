@@ -370,6 +370,79 @@ class AuthService extends BaseService {
   }
 
   /**
+   * Verify Google OAuth tokens and authenticate user
+   * Used by Chrome extension and other OAuth clients
+   * @param {string} idToken - Google ID token
+   * @param {string} accessToken - Google access token
+   * @returns {Object} User and JWT token
+   */
+  async googleTokenExchange(idToken, accessToken) {
+    try {
+      const { OAuth2Client } = require('google-auth-library');
+
+      this.logger.debug('Verifying Google tokens', {
+        hasIdToken: !!idToken,
+        hasAccessToken: !!accessToken
+      });
+
+      // Initialize OAuth2 client
+      const oauth2Client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+
+      // Verify the ID token
+      this.logger.debug('Verifying ID token');
+      const ticket = await oauth2Client.verifyIdToken({
+        idToken: idToken,
+        audience: process.env.GOOGLE_CLIENT_ID
+      });
+
+      const payload = ticket.getPayload();
+
+      this.logger.debug('ID token verified, user info retrieved', {
+        sub: payload.sub,
+        email: payload.email,
+        name: payload.name,
+        picture: payload.picture,
+        emailVerified: payload.email_verified
+      });
+
+      // Create a profile object similar to passport-google-oauth20
+      const profile = {
+        id: payload.sub,
+        provider: 'google',
+        displayName: payload.name,
+        emails: [{ value: payload.email, verified: payload.email_verified }],
+        photos: payload.picture ? [{ value: payload.picture }] : []
+      };
+
+      // Use existing googleAuth method to handle user creation/login
+      const result = await this.googleAuth(profile);
+
+      this.logger.info('Google token exchange completed successfully', {
+        userId: result.user._id,
+        email: result.user.email
+      });
+
+      // Return in the format expected by Chrome extension
+      return {
+        jwt: result.token,
+        user: {
+          id: result.user._id,
+          email: result.user.email,
+          name: result.user.name,
+          picture: result.user.avatar
+        }
+      };
+    } catch (error) {
+      this.logger.error('Google token verification failed', {
+        error: error.message,
+        stack: error.stack,
+        errorCode: error.code
+      });
+      this.logAndThrow(error, 'Google token verification');
+    }
+  }
+
+  /**
    * Get user by ID
    * @param {string} userId - User ID
    * @returns {Object} User object

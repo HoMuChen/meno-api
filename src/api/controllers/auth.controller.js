@@ -153,6 +153,75 @@ class AuthController extends BaseController {
 
     throw new UnauthorizedError('Google authentication failed');
   });
+
+  /**
+   * @swagger
+   * /auth/google/token:
+   *   post:
+   *     summary: Verify Google OAuth tokens and return JWT (Chrome Extension)
+   *     tags: [Auth]
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required:
+   *               - idToken
+   *               - accessToken
+   *             properties:
+   *               idToken:
+   *                 type: string
+   *                 description: Google ID token from chrome.identity.getAuthToken()
+   *               accessToken:
+   *                 type: string
+   *                 description: Google access token from chrome.identity.getAuthToken()
+   *     responses:
+   *       200:
+   *         description: Authentication successful
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 jwt:
+   *                   type: string
+   *                   description: Backend JWT token
+   *                 user:
+   *                   type: object
+   *                   properties:
+   *                     id:
+   *                       type: string
+   *                     email:
+   *                       type: string
+   *                     name:
+   *                       type: string
+   *                     picture:
+   *                       type: string
+   *       400:
+   *         description: Missing required tokens
+   *       401:
+   *         description: Invalid tokens
+   */
+  googleTokenExchange = this.asyncHandler(async (req, res) => {
+    const { idToken, accessToken } = req.body;
+
+    this.logger.debug('Google token verification initiated', {
+      hasIdToken: !!idToken,
+      hasAccessToken: !!accessToken
+    });
+
+    // Verify tokens and get user profile
+    const result = await this.authService.googleTokenExchange(idToken, accessToken);
+
+    this.logger.info('Google token verification successful', {
+      userId: result.user.id,
+      email: result.user.email
+    });
+
+    // Return response in expected format (without wrapping in data/success)
+    return res.json(result);
+  });
 }
 
 module.exports = AuthController;

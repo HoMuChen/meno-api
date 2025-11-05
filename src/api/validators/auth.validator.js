@@ -66,7 +66,23 @@ const loginSchema = Joi.object({
     })
 });
 
+const googleTokenSchema = Joi.object({
+  idToken: Joi.string()
+    .required()
+    .messages({
+      'any.required': 'ID token is required',
+      'string.empty': 'ID token cannot be empty'
+    }),
+  accessToken: Joi.string()
+    .required()
+    .messages({
+      'any.required': 'Access token is required',
+      'string.empty': 'Access token cannot be empty'
+    })
+});
+
 module.exports = {
   validateSignup: validate(signupSchema),
-  validateLogin: validate(loginSchema)
+  validateLogin: validate(loginSchema),
+  validateGoogleToken: validate(googleTokenSchema)
 };

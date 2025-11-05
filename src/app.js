@@ -175,14 +175,56 @@ const createApp = () => {
   // Request logging
   app.use(requestLogger);
 
-  // CORS (if needed)
+  // CORS Configuration
   app.use((req, res, next) => {
-    res.header('Access-Control-Allow-Origin', '*');
+    const origin = req.headers.origin;
+
+    // Build allowed origins list
+    const allowedOrigins = [
+      process.env.FRONTEND_URL,
+      'http://localhost:3001',
+      'http://localhost:3000'
+    ].filter(Boolean);
+
+    // Add custom allowed origins from environment variable
+    if (process.env.ALLOWED_ORIGINS) {
+      const customOrigins = process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim());
+      allowedOrigins.push(...customOrigins);
+    }
+
+    // Check if origin is allowed
+    let allowOrigin = '*'; // Default for development
+
+    if (origin) {
+      // Check for exact match
+      if (allowedOrigins.includes(origin)) {
+        allowOrigin = origin;
+      }
+      // Check for Chrome extension (starts with chrome-extension://)
+      else if (origin.startsWith('chrome-extension://')) {
+        allowOrigin = origin;
+        logger.debug('Chrome extension request allowed', { origin });
+      }
+      // Check for localhost with different ports (development)
+      else if (origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:')) {
+        allowOrigin = origin;
+      }
+      // In production, log rejected origins
+      else if (config.env === 'production') {
+        logger.warn('CORS: Origin not allowed', { origin, allowedOrigins });
+      }
+    }
+
+    res.header('Access-Control-Allow-Origin', allowOrigin);
     res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
     res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+    res.header('Access-Control-Allow-Credentials', 'true');
+
+    // Handle preflight requests
     if (req.method === 'OPTIONS') {
       return res.sendStatus(200);
     }
+
     next();
   });
 
