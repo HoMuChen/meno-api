@@ -3,6 +3,7 @@
  * Winston logger with file and console transports
  */
 const winston = require('winston');
+const DailyRotateFile = require('winston-daily-rotate-file');
 const path = require('path');
 const fs = require('fs');
 const config = require('../config');
@@ -39,18 +40,22 @@ const logger = winston.createLogger({
   format: logFormat,
   defaultMeta: { service: 'meno-api' },
   transports: [
-    // Error log file
-    new winston.transports.File({
-      filename: path.join(config.logging.dir, 'error.log'),
+    // Error log file - rotates daily at midnight
+    new DailyRotateFile({
+      dirname: config.logging.dir,
+      filename: 'error-%DATE%.log',
+      datePattern: 'YYYY-MM-DD',
       level: 'error',
-      maxsize: 5242880, // 5MB
-      maxFiles: 5
+      zippedArchive: false,
+      maxFiles: null // Keep all files (manual deletion)
     }),
-    // Combined log file
-    new winston.transports.File({
-      filename: path.join(config.logging.dir, 'combined.log'),
-      maxsize: 5242880, // 5MB
-      maxFiles: 5
+    // Combined log file - rotates daily at midnight
+    new DailyRotateFile({
+      dirname: config.logging.dir,
+      filename: 'combined-%DATE%.log',
+      datePattern: 'YYYY-MM-DD',
+      zippedArchive: false,
+      maxFiles: null // Keep all files (manual deletion)
     })
   ]
 });
