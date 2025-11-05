@@ -728,9 +728,18 @@ Do not include any markdown formatting or code blocks, just the JSON object.`;
         throw new Error('No transcriptions found for meeting');
       }
 
-      // Combine all transcription text
-      const fullTranscript = transcriptionData.transcriptions
-        .map(t => `${t.speaker}: ${t.text}`)
+      // Get Transcription model to populate personId
+      const Transcription = require('../../models/transcription.model');
+      const transcriptionsWithPeople = await Transcription.find({
+        _id: { $in: transcriptionData.transcriptions.map(t => t._id) }
+      }).populate('personId', 'name');
+
+      // Build transcript using personId.name first, fallback to speaker field
+      const fullTranscript = transcriptionsWithPeople
+        .map(t => {
+          const speakerName = t.personId?.name || t.speaker;
+          return `${speakerName}: ${t.text}`;
+        })
         .join('\n');
 
       // Use Gemini to generate summary with streaming (text-only processing)
