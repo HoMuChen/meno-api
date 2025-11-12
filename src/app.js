@@ -3,6 +3,7 @@
  * Configures Express app with middleware, routes, and error handling
  */
 const express = require('express');
+const cookieParser = require('cookie-parser');
 const passport = require('passport');
 const swaggerUi = require('swagger-ui-express');
 const swaggerSpec = require('./components/config/swagger');
@@ -168,6 +169,7 @@ const createApp = () => {
   logger.info('Configuring Express middleware...');
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
+  app.use(cookieParser());
 
   // Initialize Passport middleware
   app.use(passport.initialize());

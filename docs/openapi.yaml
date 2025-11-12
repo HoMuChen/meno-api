@@ -3166,3 +3166,114 @@ paths:
           description: User profile
         '401':
           description: Unauthorized
+  /auth/google/token:
+    post:
+      summary: Verify Google OAuth tokens and return JWT (Chrome Extension)
+      tags:
+        - Auth
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - idToken
+                - accessToken
+              properties:
+                idToken:
+                  type: string
+                  description: Google ID token from chrome.identity.getAuthToken()
+                accessToken:
+                  type: string
+                  description: Google access token from chrome.identity.getAuthToken()
+      responses:
+        '200':
+          description: Authentication successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  jwt:
+                    type: string
+                    description: Backend JWT token
+                  user:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                      email:
+                        type: string
+                      name:
+                        type: string
+                      picture:
+                        type: string
+        '400':
+          description: Missing required tokens
+        '401':
+          description: Invalid tokens
+  /auth/refresh:
+    post:
+      summary: Refresh access token using refresh token
+      tags:
+        - Auth
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - refreshToken
+              properties:
+                refreshToken:
+                  type: string
+                  description: Valid refresh token
+      responses:
+        '200':
+          description: Token refreshed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      user:
+                        type: object
+                      accessToken:
+                        type: string
+                      refreshToken:
+                        type: string
+                      expiresIn:
+                        type: number
+        '400':
+          description: Missing refresh token
+        '401':
+          description: Invalid or expired refresh token
+  /auth/logout:
+    post:
+      summary: Logout and revoke refresh token
+      tags:
+        - Auth
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - refreshToken
+              properties:
+                refreshToken:
+                  type: string
+                  description: Refresh token to revoke
+      responses:
+        '200':
+          description: Logout successful
+        '400':
+          description: Missing refresh token

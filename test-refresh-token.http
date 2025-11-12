@@ -1,0 +1,120 @@
+# Test refresh token implementation
+# Use REST Client extension in VS Code or similar HTTP client
+
+### Variables
+@baseUrl = http://localhost:6001
+@email = test@example.com
+@password = testpassword123
+@name = Test User
+
+### 1. Sign up new user
+POST {{baseUrl}}/auth/signup
+Content-Type: application/json
+
+{
+  "email": "{{email}}",
+  "password": "{{password}}",
+  "name": "{{name}}"
+}
+
+### Expected Response:
+# {
+#   "success": true,
+#   "message": "User registered successfully",
+#   "data": {
+#     "user": { ... },
+#     "accessToken": "eyJhbGc...",
+#     "refreshToken": "abc123...",
+#     "expiresIn": 86400
+#   }
+# }
+
+### 2. Login
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{email}}",
+  "password": "{{password}}"
+}
+
+### Expected Response:
+# Same as signup response
+
+### 3. Get user profile (use accessToken from login/signup)
+GET {{baseUrl}}/auth/me
+Authorization: Bearer YOUR_ACCESS_TOKEN_HERE
+
+### 4. Refresh token
+POST {{baseUrl}}/auth/refresh
+Content-Type: application/json
+
+{
+  "refreshToken": "YOUR_REFRESH_TOKEN_HERE"
+}
+
+### Expected Response:
+# {
+#   "success": true,
+#   "message": "Token refreshed successfully",
+#   "data": {
+#     "user": { ... },
+#     "accessToken": "NEW_ACCESS_TOKEN",
+#     "refreshToken": "NEW_REFRESH_TOKEN",
+#     "expiresIn": 86400
+#   }
+# }
+
+### 5. Logout (revoke refresh token)
+POST {{baseUrl}}/auth/logout
+Content-Type: application/json
+
+{
+  "refreshToken": "YOUR_REFRESH_TOKEN_HERE"
+}
+
+### Expected Response:
+# {
+#   "success": true,
+#   "message": "Logout successful"
+# }
+
+### 6. Try to use revoked refresh token (should fail)
+POST {{baseUrl}}/auth/refresh
+Content-Type: application/json
+
+{
+  "refreshToken": "REVOKED_REFRESH_TOKEN"
+}
+
+### Expected Response:
+# {
+#   "success": false,
+#   "message": "Refresh token is invalid or expired"
+# }
+
+###############################################
+# Google OAuth Flow (Chrome Extension)
+###############################################
+
+### 7. Chrome Extension - Google Token Exchange
+POST {{baseUrl}}/auth/google/token
+Content-Type: application/json
+
+{
+  "idToken": "GOOGLE_ID_TOKEN_FROM_CHROME_IDENTITY",
+  "accessToken": "GOOGLE_ACCESS_TOKEN_FROM_CHROME_IDENTITY"
+}
+
+### Expected Response:
+# {
+#   "accessToken": "eyJhbGc...",
+#   "refreshToken": "abc123...",
+#   "expiresIn": 86400,
+#   "user": {
+#     "id": "...",
+#     "email": "...",
+#     "name": "...",
+#     "picture": "..."
+#   }
+# }

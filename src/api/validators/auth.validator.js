@@ -81,8 +81,29 @@ const googleTokenSchema = Joi.object({
     })
 });
 
+// Refresh token can come from cookie OR body, so make it optional in validator
+// The controller will check both sources and return error if neither exists
+const refreshTokenSchema = Joi.object({
+  refreshToken: Joi.string()
+    .optional()
+    .messages({
+      'string.empty': 'Refresh token cannot be empty'
+    })
+}).unknown(true); // Allow empty object when token is in cookie
+
+// Logout token can also come from cookie OR body
+const logoutSchema = Joi.object({
+  refreshToken: Joi.string()
+    .optional()
+    .messages({
+      'string.empty': 'Refresh token cannot be empty'
+    })
+}).unknown(true); // Allow empty object when token is in cookie
+
 module.exports = {
   validateSignup: validate(signupSchema),
   validateLogin: validate(loginSchema),
-  validateGoogleToken: validate(googleTokenSchema)
+  validateGoogleToken: validate(googleTokenSchema),
+  validateRefreshToken: validate(refreshTokenSchema),
+  validateLogout: validate(logoutSchema)
 };

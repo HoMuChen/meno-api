@@ -48,6 +48,23 @@ class AuthController extends BaseController {
    */
   signup = this.asyncHandler(async (req, res) => {
     const result = await this.authService.signup(req.body);
+
+    // Set refresh token in httpOnly cookie
+    const isProduction = process.env.NODE_ENV === 'production';
+    const refreshTokenExpiry = process.env.REFRESH_TOKEN_EXPIRY || '7d';
+    const expiryMs = this.authService.calculateTokenExpiryMs(refreshTokenExpiry);
+
+    res.cookie('refreshToken', result.refreshToken, {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: 'lax',
+      maxAge: expiryMs
+    });
+
+    this.logger.debug('Set refresh token cookie on signup', {
+      userId: result.user._id
+    });
+
     return this.sendCreated(res, result, 'User registered successfully');
   });
 
@@ -81,6 +98,23 @@ class AuthController extends BaseController {
    */
   login = this.asyncHandler(async (req, res) => {
     const result = await this.authService.login(req.body);
+
+    // Set refresh token in httpOnly cookie
+    const isProduction = process.env.NODE_ENV === 'production';
+    const refreshTokenExpiry = process.env.REFRESH_TOKEN_EXPIRY || '7d';
+    const expiryMs = this.authService.calculateTokenExpiryMs(refreshTokenExpiry);
+
+    res.cookie('refreshToken', result.refreshToken, {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: 'lax',
+      maxAge: expiryMs
+    });
+
+    this.logger.debug('Set refresh token cookie on login', {
+      userId: result.user._id
+    });
+
     return this.sendSuccess(res, result, 'Login successful');
   });
 
@@ -104,6 +138,7 @@ class AuthController extends BaseController {
 
   /**
    * Google OAuth callback handler
+   * Uses POST message to window.opener to avoid exposing tokens in URL
    */
   googleCallback = this.asyncHandler(async (req, res) => {
     this.logger.debug('Google OAuth callback initiated', {
@@ -120,21 +155,33 @@ class AuthController extends BaseController {
     this.logger.debug('Google auth service completed', {
       userId: result.user._id,
       email: result.user.email,
-      tokenGenerated: !!result.token,
-      tokenLength: result.token?.length
+      hasAccessToken: !!result.accessToken,
+      hasRefreshToken: !!result.refreshToken
     });
 
-    // Redirect to frontend with token
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3001';
-    const redirectUrl = `${frontendUrl}?token=${result.token}`;
 
-    this.logger.info('Redirecting to frontend after Google OAuth', {
+    // Set refresh token in httpOnly cookie
+    const isProduction = process.env.NODE_ENV === 'production';
+    const refreshTokenExpiry = process.env.REFRESH_TOKEN_EXPIRY || '7d';
+    const expiryMs = this.authService.calculateTokenExpiryMs(refreshTokenExpiry);
+
+    res.cookie('refreshToken', result.refreshToken, {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: 'lax',
+      maxAge: expiryMs
+    });
+
+    this.logger.info('Redirecting to frontend with access token after Google OAuth', {
       userId: result.user._id,
       email: result.user.email,
       frontendUrl,
-      redirectUrl: `${frontendUrl}?token=***`
+      cookieSet: true
     });
 
+    // Redirect to frontend with access token in URL
+    const redirectUrl = `${frontendUrl}?token=${result.accessToken}`;
     res.redirect(redirectUrl);
   });
 
@@ -221,6 +268,161 @@ class AuthController extends BaseController {
 
     // Return response in expected format (without wrapping in data/success)
     return res.json(result);
+  });
+
+  /**
+   * @swagger
+   * /auth/refresh:
+   *   post:
+   *     summary: Refresh access token using refresh token
+   *     tags: [Auth]
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required:
+   *               - refreshToken
+   *             properties:
+   *               refreshToken:
+   *                 type: string
+   *                 description: Valid refresh token
+   *     responses:
+   *       200:
+   *         description: Token refreshed successfully
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                 data:
+   *                   type: object
+   *                   properties:
+   *                     user:
+   *                       type: object
+   *                     accessToken:
+   *                       type: string
+   *                     refreshToken:
+   *                       type: string
+   *                     expiresIn:
+   *                       type: number
+   *       400:
+   *         description: Missing refresh token
+   *       401:
+   *         description: Invalid or expired refresh token
+   */
+  refreshToken = this.asyncHandler(async (req, res) => {
+    // Try cookie first (web app), then body (Chrome extension or legacy)
+    const refreshToken = req.cookies?.refreshToken || req.body.refreshToken;
+
+    if (!refreshToken) {
+      return res.status(400).json({
+        success: false,
+        message: 'Refresh token required'
+      });
+    }
+
+    const fromCookie = !!req.cookies?.refreshToken;
+
+    this.logger.debug('Token refresh requested', {
+      hasRefreshToken: !!refreshToken,
+      tokenPreview: refreshToken ? `${refreshToken.substring(0, 20)}...` : 'none',
+      source: fromCookie ? 'cookie' : 'body'
+    });
+
+    const result = await this.authService.refreshAccessToken(refreshToken);
+
+    // If token came from cookie, update the cookie with new refresh token
+    if (fromCookie) {
+      const isProduction = process.env.NODE_ENV === 'production';
+      const refreshTokenExpiry = process.env.REFRESH_TOKEN_EXPIRY || '7d';
+      const expiryMs = this.authService.calculateTokenExpiryMs(refreshTokenExpiry);
+
+      res.cookie('refreshToken', result.refreshToken, {
+        httpOnly: true,
+        secure: isProduction,
+        sameSite: 'lax',
+        maxAge: expiryMs
+      });
+
+      this.logger.debug('Updated refresh token cookie', {
+        userId: result.user._id
+      });
+    }
+
+    this.logger.info('Token refreshed successfully', {
+      userId: result.user._id,
+      email: result.user.email,
+      cookieUpdated: fromCookie
+    });
+
+    return this.sendSuccess(res, result, 'Token refreshed successfully');
+  });
+
+  /**
+   * @swagger
+   * /auth/logout:
+   *   post:
+   *     summary: Logout and revoke refresh token
+   *     tags: [Auth]
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required:
+   *               - refreshToken
+   *             properties:
+   *               refreshToken:
+   *                 type: string
+   *                 description: Refresh token to revoke
+   *     responses:
+   *       200:
+   *         description: Logout successful
+   *       400:
+   *         description: Missing refresh token
+   */
+  logout = this.asyncHandler(async (req, res) => {
+    // Try cookie first (web app), then body (Chrome extension or legacy)
+    const refreshToken = req.cookies?.refreshToken || req.body.refreshToken;
+
+    if (!refreshToken) {
+      return res.status(400).json({
+        success: false,
+        message: 'Refresh token required'
+      });
+    }
+
+    const fromCookie = !!req.cookies?.refreshToken;
+
+    this.logger.debug('Logout requested', {
+      hasRefreshToken: !!refreshToken,
+      tokenPreview: refreshToken ? `${refreshToken.substring(0, 20)}...` : 'none',
+      source: fromCookie ? 'cookie' : 'body'
+    });
+
+    await this.authService.revokeRefreshToken(refreshToken);
+
+    // Clear cookie if it was used
+    if (fromCookie) {
+      res.clearCookie('refreshToken', {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax'
+      });
+
+      this.logger.debug('Cleared refresh token cookie');
+    }
+
+    this.logger.info('User logged out successfully', {
+      cookieCleared: fromCookie
+    });
+
+    return this.sendSuccess(res, null, 'Logout successful');
   });
 }
 

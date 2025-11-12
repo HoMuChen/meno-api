@@ -4,7 +4,7 @@
  */
 const express = require('express');
 const passport = require('passport');
-const { validateSignup, validateLogin, validateGoogleToken } = require('../validators/auth.validator');
+const { validateSignup, validateLogin, validateGoogleToken, validateRefreshToken, validateLogout } = require('../validators/auth.validator');
 const { authenticate } = require('../middleware/auth.middleware');
 
 const createAuthRoutes = (authController) => {
@@ -56,6 +56,10 @@ const createAuthRoutes = (authController) => {
 
   // Chrome Extension OAuth token exchange
   router.post('/google/token', validateGoogleToken, authController.googleTokenExchange);
+
+  // Token refresh and logout
+  router.post('/refresh', validateRefreshToken, authController.refreshToken);
+  router.post('/logout', validateLogout, authController.logout);
 
   return router;
 };

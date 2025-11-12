@@ -3,10 +3,12 @@
  * Business logic for user authentication
  */
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 const User = require('../../models/user.model');
 const TierConfig = require('../../models/tierConfig.model');
 const Project = require('../../models/project.model');
 const Person = require('../../models/person.model');
+const RefreshToken = require('../../models/refreshToken.model');
 const BaseService = require('./base.service');
 
 class AuthService extends BaseService {
@@ -15,14 +17,284 @@ class AuthService extends BaseService {
   }
 
   /**
-   * Generate JWT token
+   * Generate access JWT token (short-lived)
    * @param {Object} payload - Token payload
    * @returns {string} JWT token
    */
   generateToken(payload) {
     return jwt.sign(payload, process.env.JWT_SECRET, {
-      expiresIn: process.env.JWT_EXPIRY || '7d'
+      expiresIn: process.env.ACCESS_TOKEN_EXPIRY || '1d'
     });
+  }
+
+  /**
+   * Generate refresh token (long-lived)
+   * @param {string} userId - User ID
+   * @returns {Object} Refresh token object with token string and expiry
+   */
+  async generateRefreshToken(userId) {
+    try {
+      // Generate a random refresh token
+      const token = crypto.randomBytes(64).toString('hex');
+
+      // Calculate expiry date
+      const expiryDuration = process.env.REFRESH_TOKEN_EXPIRY || '7d';
+      const expiresAt = this.calculateTokenExpiry(expiryDuration);
+
+      // Save refresh token to database
+      const refreshToken = new RefreshToken({
+        token,
+        userId,
+        expiresAt
+      });
+
+      await refreshToken.save();
+
+      this.logger.debug('Refresh token generated', {
+        userId,
+        expiresAt,
+        tokenPreview: `${token.substring(0, 20)}...`
+      });
+
+      return {
+        token,
+        expiresAt
+      };
+    } catch (error) {
+      this.logger.error('Failed to generate refresh token', {
+        error: error.message,
+        stack: error.stack,
+        userId
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Calculate token expiry date from duration string
+   * @param {string} duration - Duration string (e.g., '7d', '24h', '30m')
+   * @returns {Date} Expiry date
+   */
+  calculateTokenExpiry(duration) {
+    const match = duration.match(/^(\d+)([dhms])$/);
+    if (!match) {
+      throw new Error('Invalid duration format');
+    }
+
+    const value = parseInt(match[1]);
+    const unit = match[2];
+
+    const now = new Date();
+    switch (unit) {
+      case 'd':
+        return new Date(now.getTime() + value * 24 * 60 * 60 * 1000);
+      case 'h':
+        return new Date(now.getTime() + value * 60 * 60 * 1000);
+      case 'm':
+        return new Date(now.getTime() + value * 60 * 1000);
+      case 's':
+        return new Date(now.getTime() + value * 1000);
+      default:
+        throw new Error('Invalid duration unit');
+    }
+  }
+
+  /**
+   * Calculate token expiry duration in milliseconds
+   * @param {string} duration - Duration string (e.g., '7d', '24h', '30m')
+   * @returns {number} Duration in milliseconds
+   */
+  calculateTokenExpiryMs(duration) {
+    const match = duration.match(/^(\d+)([dhms])$/);
+    if (!match) {
+      throw new Error('Invalid duration format');
+    }
+
+    const value = parseInt(match[1]);
+    const unit = match[2];
+
+    switch (unit) {
+      case 'd':
+        return value * 24 * 60 * 60 * 1000;
+      case 'h':
+        return value * 60 * 60 * 1000;
+      case 'm':
+        return value * 60 * 1000;
+      case 's':
+        return value * 1000;
+      default:
+        throw new Error('Invalid duration unit');
+    }
+  }
+
+  /**
+   * Refresh access token using refresh token
+   * @param {string} refreshTokenString - Refresh token
+   * @returns {Object} New access token and refresh token
+   */
+  async refreshAccessToken(refreshTokenString) {
+    try {
+      this.logger.debug('Attempting to refresh access token', {
+        tokenPreview: `${refreshTokenString.substring(0, 20)}...`
+      });
+
+      // Find refresh token in database
+      const refreshToken = await RefreshToken.findOne({
+        token: refreshTokenString
+      }).populate('userId');
+
+      if (!refreshToken) {
+        this.logger.warn('Refresh token not found', {
+          tokenPreview: `${refreshTokenString.substring(0, 20)}...`
+        });
+        throw new Error('Invalid refresh token');
+      }
+
+      // Check if token is valid (not revoked and not expired)
+      if (!refreshToken.isValid()) {
+        this.logger.warn('Refresh token is invalid or expired', {
+          userId: refreshToken.userId,
+          revoked: refreshToken.revoked,
+          expiresAt: refreshToken.expiresAt,
+          now: new Date()
+        });
+        throw new Error('Refresh token is invalid or expired');
+      }
+
+      const user = await User.findById(refreshToken.userId).populate('tier');
+      if (!user) {
+        this.logger.error('User not found for refresh token', {
+          userId: refreshToken.userId
+        });
+        throw new Error('User not found');
+      }
+
+      // Check if user is active
+      if (user.status !== 'active') {
+        this.logger.warn('Inactive account attempted token refresh', {
+          userId: user._id,
+          status: user.status
+        });
+        throw new Error('Account is not active');
+      }
+
+      // Revoke old refresh token (simple rotation)
+      refreshToken.revoked = true;
+      refreshToken.revokedAt = new Date();
+      await refreshToken.save();
+
+      this.logger.debug('Old refresh token revoked', {
+        userId: user._id,
+        tokenId: refreshToken._id
+      });
+
+      // Generate new access token
+      const accessToken = this.generateToken({
+        userId: user._id,
+        email: user.email
+      });
+
+      // Generate new refresh token
+      const newRefreshToken = await this.generateRefreshToken(user._id);
+
+      this.logger.info('Tokens refreshed successfully', {
+        userId: user._id,
+        email: user.email
+      });
+
+      return {
+        user: user.toSafeObject(),
+        accessToken,
+        refreshToken: newRefreshToken.token,
+        expiresIn: this.getAccessTokenExpirySeconds()
+      };
+    } catch (error) {
+      this.logger.error('Token refresh failed', {
+        error: error.message,
+        stack: error.stack
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Get access token expiry in seconds
+   * @returns {number} Expiry in seconds
+   */
+  getAccessTokenExpirySeconds() {
+    const duration = process.env.ACCESS_TOKEN_EXPIRY || '1d';
+    const match = duration.match(/^(\d+)([dhms])$/);
+    if (!match) return 86400; // default 1 day
+
+    const value = parseInt(match[1]);
+    const unit = match[2];
+
+    switch (unit) {
+      case 'd': return value * 24 * 60 * 60;
+      case 'h': return value * 60 * 60;
+      case 'm': return value * 60;
+      case 's': return value;
+      default: return 86400;
+    }
+  }
+
+  /**
+   * Revoke refresh token (logout)
+   * @param {string} refreshTokenString - Refresh token to revoke
+   * @returns {boolean} Success status
+   */
+  async revokeRefreshToken(refreshTokenString) {
+    try {
+      this.logger.debug('Attempting to revoke refresh token', {
+        tokenPreview: `${refreshTokenString.substring(0, 20)}...`
+      });
+
+      const refreshToken = await RefreshToken.revokeToken(refreshTokenString);
+
+      if (!refreshToken) {
+        this.logger.warn('Refresh token not found for revocation', {
+          tokenPreview: `${refreshTokenString.substring(0, 20)}...`
+        });
+        return false;
+      }
+
+      this.logger.info('Refresh token revoked successfully', {
+        userId: refreshToken.userId,
+        tokenId: refreshToken._id
+      });
+
+      return true;
+    } catch (error) {
+      this.logger.error('Failed to revoke refresh token', {
+        error: error.message,
+        stack: error.stack
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Revoke all refresh tokens for a user
+   * @param {string} userId - User ID
+   * @returns {boolean} Success status
+   */
+  async revokeAllUserTokens(userId) {
+    try {
+      this.logger.debug('Revoking all refresh tokens for user', { userId });
+
+      await RefreshToken.revokeAllUserTokens(userId);
+
+      this.logger.info('All refresh tokens revoked for user', { userId });
+
+      return true;
+    } catch (error) {
+      this.logger.error('Failed to revoke all user tokens', {
+        error: error.message,
+        stack: error.stack,
+        userId
+      });
+      throw error;
+    }
   }
 
   /**
@@ -155,15 +427,19 @@ class AuthService extends BaseService {
       // Create default person (self) for new user
       await this.createDefaultPerson(user._id, user.name, user.email);
 
-      // Generate token
-      const token = this.generateToken({
+      // Generate access and refresh tokens
+      const accessToken = this.generateToken({
         userId: user._id,
         email: user.email
       });
 
+      const refreshToken = await this.generateRefreshToken(user._id);
+
       return {
         user: user.toSafeObject(),
-        token
+        accessToken,
+        refreshToken: refreshToken.token,
+        expiresIn: this.getAccessTokenExpirySeconds()
       };
     } catch (error) {
       this.logAndThrow(error, 'Signup');
@@ -203,15 +479,19 @@ class AuthService extends BaseService {
 
       this.logSuccess('User logged in successfully', { userId: user._id, email: user.email });
 
-      // Generate token
-      const token = this.generateToken({
+      // Generate access and refresh tokens
+      const accessToken = this.generateToken({
         userId: user._id,
         email: user.email
       });
 
+      const refreshToken = await this.generateRefreshToken(user._id);
+
       return {
         user: user.toSafeObject(),
-        token
+        accessToken,
+        refreshToken: refreshToken.token,
+        expiresIn: this.getAccessTokenExpirySeconds()
       };
     } catch (error) {
       this.logAndThrow(error, 'Login');
@@ -337,26 +617,31 @@ class AuthService extends BaseService {
         throw new Error('Account is not active');
       }
 
-      this.logger.debug('Generating JWT token', {
+      this.logger.debug('Generating JWT tokens', {
         userId: user._id,
         email: user.email
       });
 
-      // Generate token
-      const token = this.generateToken({
+      // Generate access and refresh tokens
+      const accessToken = this.generateToken({
         userId: user._id,
         email: user.email
       });
 
-      this.logger.debug('Token generated successfully', {
+      const refreshToken = await this.generateRefreshToken(user._id);
+
+      this.logger.debug('Tokens generated successfully', {
         userId: user._id,
-        tokenLength: token.length,
-        tokenPreview: `${token.substring(0, 20)}...`
+        accessTokenLength: accessToken.length,
+        accessTokenPreview: `${accessToken.substring(0, 20)}...`,
+        refreshTokenPreview: `${refreshToken.token.substring(0, 20)}...`
       });
 
       return {
         user: user.toSafeObject(),
-        token
+        accessToken,
+        refreshToken: refreshToken.token,
+        expiresIn: this.getAccessTokenExpirySeconds()
       };
     } catch (error) {
       this.logger.error('Google auth failed', {
@@ -424,7 +709,9 @@ class AuthService extends BaseService {
 
       // Return in the format expected by Chrome extension
       return {
-        jwt: result.token,
+        accessToken: result.accessToken,
+        refreshToken: result.refreshToken,
+        expiresIn: result.expiresIn,
         user: {
           id: result.user._id,
           email: result.user.email,
