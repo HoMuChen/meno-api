@@ -54,6 +54,14 @@ const options = {
       {
         name: 'Transcriptions',
         description: 'Transcription management endpoints for viewing and editing meeting transcripts'
+      },
+      {
+        name: 'Integrations',
+        description: 'Integration management endpoints for connecting external services (LINE, Telegram, etc.)'
+      },
+      {
+        name: 'Webhooks',
+        description: 'Webhook endpoints for receiving events from external services'
       }
     ],
     components: {
@@ -124,6 +132,97 @@ const options = {
                   }
                 }
               }
+            }
+          }
+        },
+        Integration: {
+          type: 'object',
+          properties: {
+            id: {
+              type: 'string',
+              description: 'Integration ID',
+              example: '507f1f77bcf86cd799439011'
+            },
+            userId: {
+              type: 'string',
+              description: 'User ID',
+              example: '507f191e810c19729de860ea'
+            },
+            provider: {
+              type: 'string',
+              enum: ['line', 'telegram', 'whatsapp'],
+              description: 'Integration provider',
+              example: 'line'
+            },
+            providerId: {
+              type: 'string',
+              description: 'External provider user ID (e.g., LINE user ID)',
+              example: 'U1234567890abcdef'
+            },
+            providerData: {
+              type: 'object',
+              properties: {
+                displayName: {
+                  type: 'string',
+                  description: 'User display name from provider',
+                  example: 'John Doe'
+                },
+                pictureUrl: {
+                  type: 'string',
+                  description: 'Profile picture URL from provider',
+                  example: 'https://profile.line-scdn.net/...'
+                },
+                statusMessage: {
+                  type: 'string',
+                  description: 'User status message from provider'
+                },
+                language: {
+                  type: 'string',
+                  description: 'User language preference',
+                  example: 'en'
+                }
+              }
+            },
+            status: {
+              type: 'string',
+              enum: ['active', 'inactive', 'revoked'],
+              description: 'Integration status',
+              example: 'active'
+            },
+            defaultProjectId: {
+              type: 'string',
+              description: 'Default project ID for meetings created via this integration',
+              example: '507f1f77bcf86cd799439011'
+            },
+            settings: {
+              type: 'object',
+              properties: {
+                autoTranscribe: {
+                  type: 'boolean',
+                  description: 'Automatically start transcription for uploaded audio',
+                  example: true
+                },
+                notifyOnComplete: {
+                  type: 'boolean',
+                  description: 'Send notification when transcription completes',
+                  example: false
+                }
+              }
+            },
+            isActive: {
+              type: 'boolean',
+              description: 'Whether integration is currently active',
+              example: true
+            },
+            createdAt: {
+              type: 'string',
+              format: 'date-time',
+              description: 'Integration creation timestamp'
+            },
+            updatedAt: {
+              type: 'string',
+              format: 'date-time',
+              description: 'Integration last update timestamp'
             }
           }
         }

@@ -63,11 +63,6 @@ const errorHandler = (err, req, res, next) => {
     ...(error.errors && { errors: error.errors })
   };
 
-  // Include stack trace in development
-  if (process.env.NODE_ENV === 'development') {
-    response.stack = error.stack;
-  }
-
   res.status(statusCode).json(response);
 };
 

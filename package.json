@@ -39,6 +39,7 @@
   "dependencies": {
     "@google-cloud/storage": "^7.17.2",
     "@google/generative-ai": "^0.21.0",
+    "@line/bot-sdk": "^10.5.0",
     "bcryptjs": "^3.0.2",
     "bullmq": "^5.63.0",
     "cookie-parser": "^1.4.7",

@@ -13,11 +13,12 @@ const config = require('./components/config');
 const configurePassport = require('./components/config/passport');
 const createRoutes = require('./api/routes');
 const createAuthRoutes = require('./api/routes/auth.routes');
+const createLineWebhookRoutes = require('./api/routes/line-webhook.routes');
 const { errorHandler, notFound } = require('./api/middleware/errorHandler');
 const requestLogger = require('./api/middleware/requestLogger');
 
 // Import services and controllers
-const { UserService, FileService, AuthService, AuthorizationService, PersonService } = require('./core/services');
+const { UserService, FileService, AuthService, AuthorizationService, PersonService, IntegrationService, LineService, LineWebhookService } = require('./core/services');
 const ProjectService = require('./core/services/project.service');
 const MeetingService = require('./core/services/meeting.service');
 const TranscriptionDataService = require('./core/services/transcription-data.service');
@@ -34,6 +35,8 @@ const ProjectController = require('./api/controllers/project.controller');
 const MeetingController = require('./api/controllers/meeting.controller');
 const TranscriptionController = require('./api/controllers/transcription.controller');
 const PersonController = require('./api/controllers/person.controller');
+const IntegrationController = require('./api/controllers/integration.controller');
+const LineWebhookController = require('./api/controllers/line-webhook.controller');
 
 /**
  * Create and configure Express app
@@ -146,6 +149,20 @@ const createApp = () => {
 
   logger.info('✅ Meeting and transcription services initialized');
 
+  // Initialize integration services
+  logger.info('Initializing integration services...');
+  const integrationService = new IntegrationService(logger, projectService);
+  const lineService = new LineService(logger);
+  const lineWebhookService = new LineWebhookService(
+    logger,
+    lineService,
+    integrationService,
+    meetingService,
+    audioStorageProvider,
+    fileService
+  );
+  logger.info('✅ Integration services initialized (Integration, LINE, LINE Webhook)');
+
   // Initialize controllers with services
   logger.info('Initializing API controllers...');
 
@@ -162,8 +179,10 @@ const createApp = () => {
     logger
   );
   const personController = new PersonController(personService, transcriptionDataService, logger);
+  const integrationController = new IntegrationController(logger, integrationService);
+  const lineWebhookController = new LineWebhookController(logger, lineWebhookService);
 
-  logger.info('✅ API controllers initialized (8 controllers ready)');
+  logger.info('✅ API controllers initialized (10 controllers ready)');
 
   // Basic middleware
   logger.info('Configuring Express middleware...');
@@ -252,6 +271,10 @@ const createApp = () => {
     });
   });
 
+  // LINE webhook routes (public, at root level)
+  logger.info('Mounting LINE webhook routes at /webhooks/line');
+  app.use('/webhooks/line', createLineWebhookRoutes(lineWebhookController));
+
   // Auth routes (at root level)
   logger.info('Mounting authentication routes at /auth');
   app.use('/auth', createAuthRoutes(authController));
@@ -265,7 +288,8 @@ const createApp = () => {
     projectController,
     meetingController,
     transcriptionController,
-    personController
+    personController,
+    integrationController
   }, audioStorageProvider));
 
   logger.info('✅ Routes mounted successfully');

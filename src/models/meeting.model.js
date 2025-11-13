@@ -105,8 +105,8 @@ const meetingSchema = new mongoose.Schema(
     recordingType: {
       type: String,
       enum: {
-        values: ['upload', 'direct'],
-        message: 'Recording type must be either upload or direct'
+        values: ['upload', 'direct', 'integration'],
+        message: 'Recording type must be either upload, direct, or integration'
       },
       required: [true, 'Recording type is required']
     },
@@ -191,6 +191,28 @@ const meetingSchema = new mongoose.Schema(
         },
         errorMessage: {
           type: String,
+          default: null
+        }
+      },
+      integration: {
+        provider: {
+          type: String,
+          enum: ['line', 'telegram', 'whatsapp'],
+          default: null
+        },
+        providerId: {
+          type: String,
+          default: null,
+          comment: 'External provider user ID'
+        },
+        messageId: {
+          type: String,
+          default: null,
+          comment: 'External message ID for reference'
+        },
+        integrationId: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: 'Integration',
           default: null
         }
       }

@@ -11,6 +11,9 @@ const TranscriptionService = require('./transcription.service');
 const MockTranscriptionService = require('./mock-transcription.service');
 const TranscriptionDataService = require('./transcription-data.service');
 const PersonService = require('./person.service');
+const IntegrationService = require('./integration.service');
+const LineService = require('./line.service');
+const LineWebhookService = require('./line-webhook.service');
 
 module.exports = {
   UserService,
@@ -22,5 +25,8 @@ module.exports = {
   TranscriptionService,
   MockTranscriptionService,
   TranscriptionDataService,
-  PersonService
+  PersonService,
+  IntegrationService,
+  LineService,
+  LineWebhookService,
 };

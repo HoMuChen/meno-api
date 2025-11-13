@@ -10,6 +10,7 @@ const createProjectRoutes = require('./project.routes');
 const createMeetingRoutes = require('./meeting.routes');
 const createTranscriptionRoutes = require('./transcription.routes');
 const createPersonRoutes = require('./person.routes');
+const createIntegrationRoutes = require('./integration.routes');
 
 const createRoutes = (controllers, audioStorageProvider) => {
   const router = express.Router();
@@ -32,8 +33,11 @@ const createRoutes = (controllers, audioStorageProvider) => {
   // People routes
   router.use('/people', createPersonRoutes(controllers.personController));
 
-  // Project-level transcription search route (cross-meeting search)
+  // Integration routes (authentication required)
   const { authenticate } = require('../middleware/auth.middleware');
+  router.use('/integrations', authenticate, createIntegrationRoutes(controllers.integrationController));
+
+  // Project-level transcription search route (cross-meeting search)
   const { validateSearchQuery } = require('../validators/transcription.validator');
 
   /**

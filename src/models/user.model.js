@@ -152,7 +152,19 @@ const userSchema = new mongoose.Schema(
           return new Date().getUTCFullYear();
         }
       }
-    }
+    },
+    integrations: [
+      {
+        provider: {
+          type: String,
+          enum: ['line', 'telegram', 'whatsapp']
+        },
+        linkedAt: {
+          type: Date,
+          default: Date.now
+        }
+      }
+    ]
   },
   {
     timestamps: true,
